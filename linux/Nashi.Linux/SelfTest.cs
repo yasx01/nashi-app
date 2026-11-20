@@ -43,6 +43,8 @@ internal static class SelfTest
             Task.Run(() => CheckOperations(root)).GetAwaiter().GetResult();
             Task.Run(() => ImageEditingChecks.Run(root)).GetAwaiter().GetResult();
             Task.Run(() => DocumentChecks.Run(root)).GetAwaiter().GetResult();
+            Task.Run(() => MetadataChecks.Run(root)).GetAwaiter().GetResult();
+            Task.Run(() => PdfCompressionChecks.Run(root)).GetAwaiter().GetResult();
             var pdfThumbnails = Task.Run(() => PdfOrganizerChecks.Prepare(root)).GetAwaiter().GetResult();
             var playbackFixture = Task.Run(() => MediaPlaybackChecks.Prepare(root)).GetAwaiter().GetResult();
             var window = new MainWindow(dataDirectory: Path.Combine(root, "library"));
@@ -73,6 +75,7 @@ internal static class SelfTest
             wheel.Close(); selectedWindow.Close();
             ImageEditorChecks.Run(root, preview);
             PdfOrganizerChecks.Interact(pdfThumbnails, root, preview);
+            MetadataChecks.Interact(root, preview);
             if (playbackFixture is { } fixture) { MediaPlaybackChecks.Run(fixture, preview); MediaEditorChecks.Run(fixture, root, preview); }
             Console.WriteLine("PASS: image/PDF/subtitle exports, originals, duplicate names, cancellation, invalid crop, Home render and Library shortcut; installed FFmpeg/LibreOffice checks included when available.");
         }

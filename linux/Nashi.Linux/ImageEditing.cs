@@ -44,6 +44,7 @@ public sealed record ImageEditOptions
     public long? TargetBytes { get; init; }
     public double? ReductionPercent { get; init; }
     public int[]? InputOrder { get; init; }
+    public bool PreserveMetadata { get; init; }
 }
 
 internal static class ImageEditing

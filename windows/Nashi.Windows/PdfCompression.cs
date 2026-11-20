@@ -11,7 +11,7 @@ internal static class PdfCompression
         using var tx=new ExportTransaction(destination);var outputs=new List<string>();foreach(var input in inputs)
         {
             var original=new FileInfo(input).Length;var target=ImageEngine.CompressionTarget(original,options.TargetBytes,options.ReductionPercent);using var source=PdfReader.Open(input,password,PdfDocumentOpenMode.Import);
-            var featureful=source.Internals.Catalog.Elements.ContainsKey("/AcroForm")||source.Internals.Catalog.Elements.ContainsKey("/Names")||source.Internals.Catalog.Elements.ContainsKey("/Outlines")||source.Internals.Catalog.Elements.ContainsKey("/AF")||source.Internals.Catalog.Elements.ContainsKey("/Collection")||source.Pages.Cast<PdfPage>().Any(p=>p.Elements.ContainsKey("/Annots"));var text=OfficeDocuments.PdfText(input,password);
+            var featureful=DocumentEngine.RequiresLosslessCompression(source);var text=OfficeDocuments.PdfText(input,password);
             // Rendering a protected PDF into a new document would drop its password; DocumentEngine keeps it as it is.
             if(featureful||DocumentEngine.Protected(source)||!string.IsNullOrWhiteSpace(text))
             {

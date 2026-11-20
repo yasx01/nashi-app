@@ -9,7 +9,7 @@ Geliştirme `fedora-full` dalında; yayımlanan sürüm `fedora-port` dalında k
 
 - [ ] Görsel araçları: anotasyon (şekil/metin/serbest çizim, seç/taşı/sil/geri al),
   fon/çerçeve, kolaj, redaksiyon, etkileşimli kırpma, bütün fotoğraf ayarları,
-  döndürme/çevirme, çok sayfalı görsel PDF, hedef boyutta sıkıştırma ve metaveri.
+  döndürme/çevirme, çok sayfalı görsel PDF, hedef boyutta sıkıştırma ve metaveri; otomatik metin/yüz sansür alanı bulma.
 - [ ] Medya: gömülü oynatma/ses, klavye taşıma kontrolleri, zaman çizgisi,
   seçili aralık oynatma, kırpma, video/ses redaksiyonu, bölme işaretleri,
   kare listesi, görselleştirme seçenekleri ve işlenmiş çıktı önizlemesi.
@@ -41,18 +41,19 @@ Yalnızca katalogda görünmesi veya genel derleme testinin geçmesi yeterli de�
   gerçek dosya çıktılarıyla geçti. Orijinaller ve bozuk geometri sınırları kontrol edildi.
 - Editör: gerçek fare olaylarıyla kırpma oluşturma/taşıma/Shift ile oran koruma,
   Enter ile kabul, anotasyon taşıma/silme/Ctrl+Z testleri geçti.
-- Görsel metaveri alan düzenlemesi ve kalan kabul kapıları hâlâ tamamlanmadı.
+- Görsel metaveri alan düzenlemesi ve dönüşümde koruma eklendi; gerçek ExifTool
+  testleri geçti. Otomatik sansür alanı bulma ve kalan kabul kapıları tamamlanmadı.
 - Belge motoru: Linux Poppler ile sınırlı PDF görüntüleme; PDF/Office/EPUB
   dönüşümleri, düzenlenebilir/korunan belge düzeni, Pages dosyası ve klasör paketi
   gerçek roundtrip testleriyle geçti. PDF sayfalarından QR okuma doğrulandı.
-  OCR yolu eklendi; ayrı OCR çıktısı testi henüz tamamlanmadı.
+  OCR gerçek tarama çıktısıyla temiz Fedora testinde doğrulandı.
 - RTFD dönüştürücüsü ortak motora taşındı. Ek dosyaların sembolik bağlantılarla
   paket dışından okunması ve aşırı açılmış içerik reddediliyor; sınır testleri geçti.
 - PDF sayfa düzenleyicisi: gerçek çıktı ve arayüz testlerinde sıralama, çoğaltma,
   her kopyayı ayrı döndürme, eşit genişlik ve sayfa aralığıyla bölme geçti.
   Kullanıcı/sahip şifreleri, yanlış şifre ve aşırı büyük sayfa reddi doğrulandı.
 - Ortak motora taşıma sonrası Windows çapraz derlemesi sıfır hata/uyarıyla geçti;
-  ortak motorun doğrulanan araçlarla 2.151 kontrolü yeniden geçti.
+  ortak motorun doğrulanan araçlarla 2.158 kontrolü yeniden geçti.
 - Medya düzenleyicisi: LibVLC ile uygulama içi video/ses oynatma, duraklatma,
   ileri sarma ve yerel dosya sınırı gerçek çözme testinden geçti. Video kırpma,
   zamanlı video sansürü, birden çok ses sansür aralığı ve işlenmiş dosya önizlemesi
@@ -60,4 +61,11 @@ Yalnızca katalogda görünmesi veya genel derleme testinin geçmesi yeterli de�
   fiziksel hoparlör ve temiz Fedora codec kapsamı henüz doğrulanmadı.
 - Anotasyon fontu artık fontconfig'in verdiği dosyadan yükleniyor. Generic Magick
   font adı dekoratif bir font seçiyordu; yeni tarama yerelde gerçek Tesseract ile
-  `FEDORA OCR TEST 123` metninin tamamını verdi. Temiz Fedora OCR tekrarı bekleniyor.
+  `FEDORA OCR TEST 123` metninin tamamını verdi. Temiz Fedora OCR tekrarı da geçti (CI 44778026475).
+- Üst veri editörü: mevcut alanları gösterme, yalnız değişen alanları yazma ve
+  toplu temizleme arayüz testleri geçti. Unicode/çok satırlı alanlar, JPEG piksellerinin
+  yeniden kodlanmaması, dönüşümde etiket koruma ve yönün normalleştirilmesi doğrulandı.
+  Görsel sansürü eski özel üst verileri yeniden eklemiyor.
+- PDF sıkıştırma: tarama dosyası gerçek hedef boyuta indi ve tekrar görüntülendi;
+  özellikler korundu. Formlu PDF byte düzeyinde aynı kaldı; ulaşılamayan hedefte
+  yarım çıktı yayımlanmadı. Ortak motor sıkıştırması imza/form/ekleri koruyor.

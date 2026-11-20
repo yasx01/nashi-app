@@ -23,13 +23,18 @@ public sealed class Operations(Toolchain tools)
 
     public async Task<IReadOnlyList<string>> RunAsync(string action, string[] inputs, string destination,
         string format, int quality, int width, int height, int x, int y, MediaOptions media,
-        IProgress<OperationProgress> progress, CancellationToken token, PhotoAdjustments? adjustments = null, ImageEditOptions? imageOptions = null, DocumentOptions? documentOptions = null, PdfEditOptions? pdfOptions = null)
+        IProgress<OperationProgress> progress, CancellationToken token, PhotoAdjustments? adjustments = null, ImageEditOptions? imageOptions = null, DocumentOptions? documentOptions = null, PdfEditOptions? pdfOptions = null, MetadataEditOptions? metadataOptions = null)
     {
         if (inputs.Length == 0 || inputs.Any(p => !File.Exists(p) && !(Directory.Exists(p) && FeatureCatalog.Extension(p) is "pages" or "rtfd"))) throw new ArgumentException("Var olan dosyaları seçin.");
         if (action == "convert" ? !Formats(inputs).Contains(format) : !Tools(inputs).Contains(action))
             throw new ArgumentException("Bu işlem seçilen dosyalar için desteklenmiyor.");
         if (quality is < 1 or > 100) throw new ArgumentException("Kalite 1–100 arasında olmalı.");
         if (action == "readQRCode") throw new ArgumentException("QR sonuçları dışa aktarma yerine QR okuma ekranında gösterilir.");
+        if (action == "removeMetadata" && !inputs.All(p => FeatureCatalog.IsAudio(p) || FeatureCatalog.IsVideo(p) && FeatureCatalog.Extension(p) != "gif"))
+        {
+            var metadata = new MetadataService(tools.DirectoryPath + " Metadata"); await metadata.InstallAsync(progress, token);
+            return await metadata.WriteAsync(inputs, destination, metadataOptions?.RemoveAll ?? true, metadataOptions?.Updates, progress: progress, token: token);
+        }
         if (inputs.All(p => FeatureCatalog.IsAudio(p) || FeatureCatalog.IsVideo(p)))
         {
             var engine = new MediaEngine(tools.Executable("ffmpeg"), tools.Executable("ffprobe"));
@@ -47,10 +52,20 @@ public sealed class Operations(Toolchain tools)
             };
             var needsEncoder = action == "convert" ? format == "heic" : action is not ("frameImage" or "createPDF" or "createCollage") && inputs.Any(p => FeatureCatalog.Extension(p) == "heic");
             var encoder = needsEncoder ? tools.Executable("ffmpeg") : null;
+            if (action == "convert" && options.PreserveMetadata && format is not ("pdf" or "bmp" or "gif"))
+            {
+                var metadata = new MetadataService(tools.DirectoryPath + " Metadata"); await metadata.InstallAsync(progress, token);
+                using var tx = new ExportTransaction(destination);
+                var exported = await Task.Run(() => ImageEditing.Export(action, inputs, tx.StagingDirectory, format, options, encoder, progress, token), token);
+                for (var i = 0; i < exported.Count; i++) await metadata.CopyImageTagsAsync(inputs[i], exported[i], token);
+                return tx.Publish(exported, token);
+            }
             return await Task.Run(() => ImageEditing.Export(action, inputs, destination, format, options, encoder, progress, token), token);
         }
         var document = documentOptions ?? new DocumentOptions();
         if (action == "convert") return await new DocumentConversion(tools).ConvertAsync(inputs, format, destination, document, progress, token);
+        if (action == "compress" && inputs.All(input => FeatureCatalog.Extension(input) == "pdf"))
+            return await PdfCompression.RunAsync(inputs, destination, quality, media.TargetBytes, media.ReductionPercent, document.Password, progress, token);
         return await Task.Run<IReadOnlyList<string>>(() =>
         {
             if (inputs.All(p => FeatureCatalog.Extension(p) == "pdf"))

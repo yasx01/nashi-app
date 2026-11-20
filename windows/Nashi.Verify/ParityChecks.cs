@@ -135,6 +135,11 @@ internal static class ParityChecks
         var directCertifiedPdf=Pdf("Certified in place.pdf","BT /F1 24 Tf 72 700 Td (Certified) Tj ET",pdf=>{var perms=new PdfSharp.Pdf.PdfDictionary(pdf);perms.Elements["/DocMDP"]=Signature(pdf,false);Catalog(pdf,"/Perms",perms);});
         // /Type is optional in a signature dictionary; /ByteRange alone must be enough.
         var untypedCertifiedPdf=Pdf("Certified untyped.pdf","BT /F1 24 Tf 72 700 Td (Certified) Tj ET",pdf=>{var perms=new PdfSharp.Pdf.PdfDictionary(pdf);perms.Elements.SetReference("/DocMDP",Signature(pdf,typed:false));Catalog(pdf,"/Perms",perms);});
+        foreach(var preserved in new[]{formPdf,attachmentPdf,taggedPdf,signedPdf,certifiedPdf,directCertifiedPdf,untypedCertifiedPdf})
+        {
+            var compressed=DocumentEngine.Pdf("compress",[preserved],root).Single();
+            check(File.ReadAllBytes(compressed).SequenceEqual(File.ReadAllBytes(preserved)),"PDF compression changed forms, attachments, tags or signature-covered bytes");
+        }
         // A signature field nobody has signed yet is a form field, not a signature.
         var unsignedFieldPdf=Pdf("Unsigned field.pdf","BT /F1 24 Tf 72 700 Td (Sign here) Tj ET",pdf=>{var form=Form(pdf,true);((PdfSharp.Pdf.PdfDictionary)((PdfSharp.Pdf.Advanced.PdfReference)form.Elements.GetArray("/Fields")!.Elements[0]).Value).Elements.SetName("/FT","/Sig");pdf.Internals.Catalog.Elements.SetReference("/AcroForm",form);});
         // An incremental update that removed a signature leaves its dictionary in the file, unreachable from the catalog.

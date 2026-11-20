@@ -263,7 +263,7 @@ public sealed class MainWindow : Window
     }
     internal static string ToolTitle(string id) => id switch
     {
-        "convert" => "Dönüştür", "compress" => "Sıkıştır", "editImage" => "Fotoğrafı düzenle", "cropImage" => "Kırp", "removeMetadata" => "Metaveriyi sil", "readQRCode" => "QR oku",
+        "convert" => "Dönüştür", "compress" => "Sıkıştır", "editImage" => "Fotoğrafı düzenle", "cropImage" => "Kırp", "removeMetadata" => "Üst verileri düzenle", "readQRCode" => "QR oku",
         "normalizeAudio" => "Sesi dengele", "muteVideo" => "Sesi kaldır", "trimVideo" or "trimAudio" => "Kes", "changeVideoSpeed" => "Hızı değiştir",
         "joinVideos" => "Birleştir", "videoSnapshots" => "Kare al", "mergePDF" => "PDF birleştir", "splitPDF" => "PDF ayır", "extractArchive" => "Arşivi aç",
         "audioChannels" => "Ses kanalları", "splitVideo" => "Videoyu böl", "audioToVideo" => "Ses görselleştir", "cropVideo" => "Videoyu kırp", "redactVideo" => "Videoyu sansürle", "redactAudio" => "Sesi sansürle",
@@ -272,6 +272,7 @@ public sealed class MainWindow : Window
     private async Task Edit(string action)
     {
         if (action == "readQRCode") { await ReadQr(); return; }
+        if (action == "removeMetadata") { await EditMetadata(); return; }
         if (files.All(p => FeatureCatalog.IsAudio(p) || FeatureCatalog.IsVideo(p)))
         {
             var selected = files.ToArray(); MediaInfo? info = null;
@@ -313,6 +314,16 @@ public sealed class MainWindow : Window
             AutomationProperties.SetName(input, title); panel.Children.Add(input); return input;
         }
         var quality = Number("Kalite (%)", 85, 1, 100);
+        NumericUpDown? targetBytes = null, reduction = null;
+        if (action == "compress" && inputs.All(input => FeatureCatalog.Extension(input) == "pdf"))
+        {
+            targetBytes = Number("Hedef boyut (KB; 0: otomatik)", 0, 0, 20000000); reduction = Number("Boyut azaltma (%; 0: otomatik)", 0, 0, 99);
+        }
+        CheckBox? preserveTags = null;
+        if (action == "convert" && inputs.All(FeatureCatalog.IsImage))
+        {
+            preserveTags = new CheckBox { Content = "Üst verileri koru (PDF, BMP ve GIF hariç)", IsChecked = true }; panel.Children.Add(preserveTags);
+        }
         TextBox? password = null, pageRanges = null; NumericUpDown? dpi = null, pagesPerFile = null; ComboBox? layout = null, epubLayout = null;
         if (inputs.Any(p => FeatureCatalog.Extension(p) == "pdf" || FeatureCatalog.IsArchive(p)))
         {
@@ -347,14 +358,32 @@ public sealed class MainWindow : Window
         {
             var destination = await Folder(dialog); if (destination is null) return;
             var format = formats.SelectedItem as string ?? "";
-            var options = new MediaOptions { Quality = (double)(quality.Value ?? 85) / 100 };
+            var options = new MediaOptions { Quality = (double)(quality.Value ?? 85) / 100,
+                TargetBytes = targetBytes?.Value > 0 ? (long)targetBytes.Value * 1024 : null, ReductionPercent = reduction?.Value > 0 ? (double)reduction.Value : null };
             var document = new DocumentOptions((int)(dpi?.Value ?? 144), layout?.SelectedIndex == 1 ? "preserve" : "editable", epubLayout?.SelectedIndex == 1 ? "fixed" : "reflowable", password?.Text ?? "");
             var pdf = new PdfEditOptions(PagesPerFile: (int)(pagesPerFile?.Value ?? 1), PageRanges: pageRanges?.Text ?? "");
             dialog.Close();
             await Run(ToolTitle(action), (p, t) => new Operations(tools).RunAsync(action, inputs, destination, format, (int)(quality.Value ?? 85),
-                0, 0, 0, 0, options, p, t, documentOptions: document, pdfOptions: pdf));
+                0, 0, 0, 0, options, p, t, imageOptions: preserveTags is null ? null : new() { Quality = (int)(quality.Value ?? 85), PreserveMetadata = preserveTags.IsChecked == true }, documentOptions: document, pdfOptions: pdf));
         }, true));
         await dialog.ShowDialog(this);
+    }
+    private async Task EditMetadata()
+    {
+        var inputs = files.ToArray(); var media = inputs.All(p => FeatureCatalog.IsAudio(p) || FeatureCatalog.IsVideo(p) && FeatureCatalog.Extension(p) != "gif");
+        var metadata = new MetadataService(tools.DirectoryPath + " Metadata"); IReadOnlyDictionary<string, string>? values = null;
+        await Run("Üst veriler okunuyor", async (progress, token) =>
+        {
+            if (media) values = await MediaMetadata.Read(tools, inputs[0], token);
+            else { await metadata.InstallAsync(progress, token); values = await metadata.ReadAsync(inputs[0], token); }
+            return [];
+        });
+        if (values is null) return;
+        var editor = new MetadataEditorWindow(this, values, media, inputs.Length); await editor.ShowDialog(this);
+        if (editor.Result is not { } edit) return;
+        var folder = await Folder(this); if (folder is null) return;
+        await Run("Üst veriler", (p, t) => new Operations(tools).RunAsync("removeMetadata", inputs, folder, "", 85, 0, 0, 0, 0,
+            new() { RemoveAllMetadata = edit.RemoveAll, Metadata = edit.Updates?.ToDictionary() ?? [] }, p, t, metadataOptions: edit));
     }
     private static async Task<string?> Folder(Window owner)
     {
