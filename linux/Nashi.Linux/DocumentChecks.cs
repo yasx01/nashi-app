@@ -48,7 +48,7 @@ internal static class DocumentChecks
             }
             var scannedPdf = (await new Operations(tools).RunAsync("convert", [scan], target, "pdf", 85, 0, 0, 0, 0, new(), progress, default)).Single();
             var recognized = await LinuxPdf.TextAsync(scannedPdf, "", default);
-            Check(recognized.Contains("FEDORA", StringComparison.OrdinalIgnoreCase) && recognized.Contains("123"), "scanned PDF OCR text");
+            Check(recognized.Contains("FEDORA", StringComparison.OrdinalIgnoreCase) && recognized.Contains("123"), "scanned PDF OCR text: " + recognized.Trim());
             Console.WriteLine("PASS: real scanned PDF OCR recognizes source words and numbers.");
         }
         else Console.WriteLine("SKIP: scanned PDF OCR check needs system Tesseract.");
