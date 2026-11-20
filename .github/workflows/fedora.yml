@@ -1,7 +1,7 @@
 name: Fedora desktop release checks
 on:
   push:
-    branches: [fedora-port]
+    branches: [fedora-port, fedora-full]
   workflow_dispatch:
 permissions:
   contents: read

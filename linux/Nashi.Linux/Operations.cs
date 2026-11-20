@@ -1,7 +1,5 @@
 using ImageMagick;
 using Nashi.Core;
-using PdfSharp.Drawing;
-using PdfSharp.Pdf;
 
 namespace Nashi.Linux;
 
@@ -24,7 +22,7 @@ public sealed class Operations(Toolchain tools)
     {
         if (inputs.Count == 0) return [];
         return FeatureCatalog.Tools(inputs).Where(id =>
-            inputs.All(FeatureCatalog.IsImage) ? id is "compress" or "editImage" or "cropImage" or "removeMetadata" or "readQRCode" :
+            inputs.All(FeatureCatalog.IsImage) ? true :
             inputs.All(p => FeatureCatalog.IsAudio(p) || FeatureCatalog.IsVideo(p)) ?
                 id is "compress" or "normalizeAudio" or "muteVideo" or "trimVideo" or "trimAudio" or "changeVideoSpeed" or "joinVideos" or "videoSnapshots" or "removeMetadata" or "audioChannels" or "splitVideo" or "audioToVideo" :
             inputs.All(p => FeatureCatalog.Extension(p) == "pdf") ? id is "mergePDF" or "splitPDF" or "compress" or "removeMetadata" :
@@ -33,7 +31,7 @@ public sealed class Operations(Toolchain tools)
 
     public async Task<IReadOnlyList<string>> RunAsync(string action, string[] inputs, string destination,
         string format, int quality, int width, int height, int x, int y, MediaOptions media,
-        IProgress<OperationProgress> progress, CancellationToken token, PhotoAdjustments? adjustments = null)
+        IProgress<OperationProgress> progress, CancellationToken token, PhotoAdjustments? adjustments = null, ImageEditOptions? imageOptions = null)
     {
         if (inputs.Length == 0 || inputs.Any(p => !File.Exists(p))) throw new ArgumentException("Var olan dosyaları seçin.");
         if (action == "convert" ? !Formats(inputs).Contains(format) : !Tools(inputs).Contains(action))
@@ -46,6 +44,18 @@ public sealed class Operations(Toolchain tools)
             return action == "convert"
                 ? await engine.ConvertAsync(inputs, format, destination, media, progress, token)
                 : await engine.ToolAsync(action, inputs, destination, media, progress, token);
+        }
+        if (inputs.All(FeatureCatalog.IsImage))
+        {
+            var options = imageOptions ?? new ImageEditOptions
+            {
+                Width = action == "editImage" ? width : null, Height = action == "editImage" ? height : null,
+                Crop = action == "cropImage" ? new ImageArea(x, y, width, height) : null,
+                Quality = quality, Adjustments = adjustments ?? new()
+            };
+            var needsEncoder = action == "convert" ? format == "heic" : action is not ("frameImage" or "createPDF" or "createCollage") && inputs.Any(p => FeatureCatalog.Extension(p) == "heic");
+            var encoder = needsEncoder ? tools.Executable("ffmpeg") : null;
+            return await Task.Run(() => ImageEditing.Export(action, inputs, destination, format, options, encoder, progress, token), token);
         }
         return await Task.Run<IReadOnlyList<string>>(async () =>
         {
@@ -65,40 +75,7 @@ public sealed class Operations(Toolchain tools)
                 }
                 var targetFormat = action == "convert" ? format : FeatureCatalog.Extension(input) == "svg" ? "png" : FeatureCatalog.Extension(input);
                 var output = SafePaths.Unique(tx.StagingDirectory, Path.GetFileNameWithoutExtension(input) + " Nashi." + targetFormat);
-                if (FeatureCatalog.IsImage(input))
-                {
-                    using var image = action == "editImage" && adjustments is not null
-                        ? new MagickImage(PhotoCodec.Adjust(PhotoCodec.Png(input), adjustments)) : PhotoCodec.Read(input);
-                    if (action is "editImage" or "cropImage")
-                    {
-                        if (width < 1 || height < 1 || (long)width * height > 100_000_000)
-                            throw new ArgumentException("Boyutlar pozitif ve toplam en fazla 100 megapiksel olmalı.");
-                        if (action == "editImage") image.Resize(new MagickGeometry((uint)width, (uint)height) { IgnoreAspectRatio = false });
-                        else
-                        {
-                            if (x < 0 || y < 0 || (long)x + width > image.Width || (long)y + height > image.Height)
-                                throw new ArgumentException("Kırpma alanı görselin içinde olmalı.");
-                            image.Crop(new MagickGeometry(x, y, (uint)width, (uint)height));
-                            image.ResetPage();
-                        }
-                    }
-                    image.Quality = (uint)quality;
-                    if (action == "removeMetadata") image.Strip();
-                    if (targetFormat == "pdf")
-                    {
-                        using var pdf = new PdfDocument();
-                        var page = pdf.AddPage();
-                        page.Width = XUnit.FromPoint(image.Width * .75);
-                        page.Height = XUnit.FromPoint(image.Height * .75);
-                        using var png = new MemoryStream(image.ToByteArray(MagickFormat.Png));
-                        using var picture = XImage.FromStream(png);
-                        using (var graphics = XGraphics.FromPdfPage(page)) graphics.DrawImage(picture, 0, 0, page.Width.Point, page.Height.Point);
-                        pdf.Save(output);
-                    }
-                    else if (targetFormat == "heic") PhotoCodec.EncodePng(image.ToByteArray(MagickFormat.Png), output, targetFormat, quality, tools.Executable("ffmpeg"), token);
-                    else image.Write(output, PhotoCodec.Format(targetFormat));
-                }
-                else if (FeatureCatalog.Extension(input) == "pdf") File.WriteAllText(output, OfficeDocuments.PdfText(input));
+                if (FeatureCatalog.Extension(input) == "pdf") File.WriteAllText(output, OfficeDocuments.PdfText(input));
                 else if (FeatureCatalog.Extension(input) is "srt" or "vtt") File.WriteAllText(output, SubtitleCodec.Convert(LegacyTextCodec.Decode(File.ReadAllBytes(input)), format));
                 else
                 {

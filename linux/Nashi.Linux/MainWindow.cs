@@ -112,7 +112,7 @@ public sealed class MainWindow : Window
         Resources["NashiSurface"] = Surface; Resources["NashiLine"] = Line;
     }
     private static StackPanel Row() => new() { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
-    private Button Button(string title, Func<Task> action, bool primary = false)
+    internal Button Button(string title, Func<Task> action, bool primary = false)
     {
         var button = new Button { Content = title, Padding = new Thickness(14, 10), CornerRadius = new CornerRadius(13), FontSize = 12, BorderThickness = new Thickness(1) };
         button.Bind(BackgroundProperty, this.GetResourceObservable("NashiSurface")); button.Bind(BorderBrushProperty, this.GetResourceObservable("NashiLine"));
@@ -225,31 +225,55 @@ public sealed class MainWindow : Window
         if (files.Count == 0) return;
         var choices = Operations.Tools(files); var formats = Operations.Formats(files);
         var panel = new StackPanel { Spacing = 12 }; panel.Children.Add(Label("Dosyalarına yeni bir yön ver.", 23));
-        var canvas = new Canvas { Width = 450, Height = 360, HorizontalAlignment = HorizontalAlignment.Center };
-        var center = Artwork("NashiMarkHappy", 70); Canvas.SetLeft(center, 190); Canvas.SetTop(center, 145); canvas.Children.Add(center);
         var ids = (formats.Length > 0 ? new[] { "convert" } : []).Concat(choices).ToArray();
         if (ids.Length == 0) { status.Text = "Bu dosya türünün araçları henüz Fedora arayüzüne taşınmadı."; return; }
-        var dialog = Dialog("Araç çarkı", panel);
+        var radius = Math.Max(170, ids.Length * 22);
+        var canvas = new Canvas { Width = radius * 2 + 140, Height = radius * 2 + 60, HorizontalAlignment = HorizontalAlignment.Center };
+        var center = Artwork("NashiMarkHappy", 70); Canvas.SetLeft(center, canvas.Width / 2 - 35); Canvas.SetTop(center, canvas.Height / 2 - 35); canvas.Children.Add(center);
+        var dialog = Dialog("Araç çarkı", panel, canvas.Width + 48);
+        var buttons = new List<Button>();
         for (var i = 0; i < ids.Length; i++)
         {
             var id = ids[i]; var title = ToolTitle(id);
             var button = Button(title, async () => { dialog.Close(); await Edit(id); }, id == "convert"); button.Width = 126;
             var angle = -Math.PI / 2 + i * Math.PI * 2 / ids.Length;
-            Canvas.SetLeft(button, 162 + Math.Cos(angle) * 155); Canvas.SetTop(button, 158 + Math.Sin(angle) * 142); canvas.Children.Add(button);
+            Canvas.SetLeft(button, canvas.Width / 2 - 63 + Math.Cos(angle) * radius); Canvas.SetTop(button, canvas.Height / 2 - 20 + Math.Sin(angle) * radius); canvas.Children.Add(button); buttons.Add(button);
         }
         panel.Children.Add(canvas); panel.Children.Add(Label("Tab ile seç · Enter ile aç · Esc ile kapat", 12, true));
-        dialog.KeyDown += (_, e) => { if (e.Key == Key.Escape) dialog.Close(); }; await dialog.ShowDialog(this);
+        dialog.Focusable = true; dialog.Opened += (_, _) => dialog.Focus();
+        // The key-up that opened the wheel must not activate its first button.
+        dialog.AddHandler(KeyUpEvent, (_, e) => { if (e.Key == Key.Space && e.KeyModifiers.HasFlag(KeyModifiers.Control)) e.Handled = true; }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+        dialog.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape) dialog.Close();
+            if (e.Key is Key.Left or Key.Right or Key.Up or Key.Down)
+            {
+                var current = buttons.FindIndex(b => b.IsKeyboardFocusWithin); var step = e.Key is Key.Left or Key.Up ? -1 : 1;
+                buttons[current < 0 ? step > 0 ? 0 : buttons.Count - 1 : (current + step + buttons.Count) % buttons.Count].Focus(); e.Handled = true;
+            }
+        };
+        await dialog.ShowDialog(this);
     }
-    private static string ToolTitle(string id) => id switch
+    internal static string ToolTitle(string id) => id switch
     {
         "convert" => "Dönüştür", "compress" => "Sıkıştır", "editImage" => "Fotoğrafı düzenle", "cropImage" => "Kırp", "removeMetadata" => "Metaveriyi sil", "readQRCode" => "QR oku",
         "normalizeAudio" => "Sesi dengele", "muteVideo" => "Sesi kaldır", "trimVideo" or "trimAudio" => "Kes", "changeVideoSpeed" => "Hızı değiştir",
         "joinVideos" => "Birleştir", "videoSnapshots" => "Kare al", "mergePDF" => "PDF birleştir", "splitPDF" => "PDF ayır", "extractArchive" => "Arşivi aç",
-        "audioChannels" => "Ses kanalları", "splitVideo" => "Videoyu böl", "audioToVideo" => "Ses görselleştir", _ => id
+        "audioChannels" => "Ses kanalları", "splitVideo" => "Videoyu böl", "audioToVideo" => "Ses görselleştir",
+        "annotateImage" => "Görsele not ekle", "frameImage" => "Arka plan ekle", "createCollage" => "Kolaj oluştur", "redactImage" => "Görseli sansürle", "createPDF" => "PDF oluştur", _ => id
     };
     private async Task Edit(string action)
     {
         if (action == "readQRCode") { await ReadQr(); return; }
+        if (files.All(FeatureCatalog.IsImage) && action is not ("convert" or "removeMetadata"))
+        {
+            var selected = files.ToArray(); var editor = new ImageEditorWindow(this, action, selected);
+            await editor.ShowDialog(this);
+            if (editor.Result is not { } edit) return;
+            var folder = await Folder(this); if (folder is null) return;
+            await Run(ToolTitle(action), (p, t) => new Operations(tools).RunAsync(action, selected, folder, "", edit.Quality, 0, 0, 0, 0, new(), p, t, imageOptions: edit));
+            return;
+        }
         var inputs = files.ToArray(); var panel = new StackPanel { Spacing = 12 }; panel.Children.Add(Label(ToolTitle(action), 25));
         panel.Children.Add(Label(string.Join(", ", inputs.Select(Path.GetFileName)), 12, true));
         var formats = new ComboBox { ItemsSource = Operations.Formats(inputs), SelectedIndex = 0, HorizontalAlignment = HorizontalAlignment.Stretch };
@@ -260,26 +284,8 @@ public sealed class MainWindow : Window
             AutomationProperties.SetName(input, title); panel.Children.Add(input); return input;
         }
         var quality = Number("Kalite (%)", 85, 1, 100);
-        NumericUpDown? width = null, height = null, x = null, y = null, start = null, end = null, speed = null;
-        NumericUpDown? brightness = null, contrast = null, saturation = null;
+        NumericUpDown? start = null, end = null, speed = null;
         NumericUpDown? channels = null, clips = null, snapshot = null;
-        Bitmap? editorBitmap = null;
-        if (action is "editImage" or "cropImage")
-        {
-            using var image = PhotoCodec.Read(inputs[0]);
-            using var thumbnail = new MemoryStream(image.ToByteArray(ImageMagick.MagickFormat.Png));
-            editorBitmap = new Bitmap(thumbnail);
-            panel.Children.Add(new Image { Source = editorBitmap, MaxHeight = 220, Stretch = Stretch.Uniform });
-            width = Number("Genişlik (piksel)", image.Width, 1, 30000); height = Number("Yükseklik (piksel)", image.Height, 1, 30000);
-            if (action == "cropImage") { x = Number("Soldan (piksel)", 0, 0, 30000); y = Number("Üstten (piksel)", 0, 0, 30000); }
-            else panel.Children.Add(Label("Görsel, en-boy oranı korunarak bu sınırlar içine sığdırılır.", 12, true));
-            if (action == "editImage")
-            {
-                brightness = Number("Parlaklık (%)", 0, -100, 100);
-                contrast = Number("Kontrast (%)", 100, 0, 200);
-                saturation = Number("Doygunluk (%)", 100, 0, 200);
-            }
-        }
         if (action is "trimVideo" or "trimAudio") { start = Number("Başlangıç (saniye)", 0, 0, 864000); end = Number("Bitiş (saniye)", 10, 0, 864000); }
         if (action == "changeVideoSpeed") speed = Number("Hız çarpanı", 1, .25m, 4);
         if (action == "audioChannels") channels = Number("Kanal sayısı (1: mono, 2: stereo)", 2, 1, 2);
@@ -288,7 +294,6 @@ public sealed class MainWindow : Window
         if (action == "audioToVideo") panel.Children.Add(Label("Ses dalgası içeren 1280 × 720 MP4 oluşturulur.", 12, true));
         panel.Children.Add(Label("Orijinaller korunur. Yeni dosyalar için bir klasör seçeceksin.", 12, true));
         var dialog = Dialog(ToolTitle(action), panel);
-        dialog.Closed += (_, _) => editorBitmap?.Dispose();
         panel.Children.Add(Button("Klasör seç ve kaydet", async () =>
         {
             if (start is not null && end?.Value <= start.Value) throw new ArgumentException("Bitiş, başlangıçtan sonra olmalı.");
@@ -301,10 +306,9 @@ public sealed class MainWindow : Window
                 Channels = (int)(channels?.Value ?? 2), EqualClips = clips is null ? null : (int)(clips.Value ?? 2),
                 SnapshotTimes = [(double)(snapshot?.Value ?? 0)]
             };
-            var photo = new PhotoAdjustments { Brightness = (double)(brightness?.Value ?? 0) / 100, Contrast = (double)(contrast?.Value ?? 100) / 100, Saturation = (double)(saturation?.Value ?? 100) / 100 };
             dialog.Close();
             await Run(ToolTitle(action), (p, t) => new Operations(tools).RunAsync(action, inputs, destination, format, (int)(quality.Value ?? 85),
-                (int)(width?.Value ?? 0), (int)(height?.Value ?? 0), (int)(x?.Value ?? 0), (int)(y?.Value ?? 0), options, p, t, photo));
+                0, 0, 0, 0, options, p, t));
         }, true));
         await dialog.ShowDialog(this);
     }

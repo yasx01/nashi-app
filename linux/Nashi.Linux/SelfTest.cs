@@ -41,6 +41,7 @@ internal static class SelfTest
         try
         {
             Task.Run(() => CheckOperations(root)).GetAwaiter().GetResult();
+            Task.Run(() => ImageEditingChecks.Run(root)).GetAwaiter().GetResult();
             var window = new MainWindow(dataDirectory: Path.Combine(root, "library"));
             window.Show(); Dispatcher.UIThread.RunJobs();
             using (var frame = window.CaptureRenderedFrame() ?? throw new Exception("No rendered frame."))
@@ -67,6 +68,7 @@ internal static class SelfTest
             Check(wheel.GetLogicalDescendants().OfType<Button>().Any(b => b.Content as string == "QR oku"), "Wheel advertises QR reader");
             using (var frame = wheel.CaptureRenderedFrame() ?? throw new Exception("No wheel frame.")) frame.Save(Path.ChangeExtension(preview, ".wheel.png"));
             wheel.Close(); selectedWindow.Close();
+            ImageEditorChecks.Run(root, preview);
             Console.WriteLine("PASS: image/PDF/subtitle exports, originals, duplicate names, cancellation, invalid crop, Home render and Library shortcut; installed FFmpeg/LibreOffice checks included when available.");
         }
         finally { Directory.Delete(root, true); }
