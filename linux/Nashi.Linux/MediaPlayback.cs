@@ -110,6 +110,15 @@ internal sealed class MediaPlayback : IDisposable
             finally { Interlocked.Exchange(ref pending, 0); }
         });
     }
+    internal static async Task<byte[]> ArtworkAsync(Toolchain tools, string directory, string path, MediaInfo media, CancellationToken token)
+    {
+        var output = Path.Combine(directory, Guid.NewGuid().ToString("N") + ".png");
+        string[] args = media.Video is not null ? ["-i", path, "-map", "0:v:0", "-frames:v", "1", "-vf", "scale=1280:720:force_original_aspect_ratio=decrease"] :
+            ["-i", path, "-filter_complex", "aformat=channel_layouts=mono,showwavespic=s=1200x140:colors=0xe5bc59", "-frames:v", "1"];
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token); timeout.CancelAfter(TimeSpan.FromMinutes(2));
+        await ProcessRunner.RunAsync(tools.Executable("ffmpeg"), ["-v", "error", "-nostdin", .. args, output], timeout.Token);
+        return await File.ReadAllBytesAsync(output, token);
+    }
     public void Dispose()
     {
         if (Interlocked.Exchange(ref disposed, 1) != 0) return;

@@ -76,6 +76,7 @@ internal static class SelfTest
             ImageEditorChecks.Run(root, preview);
             PdfOrganizerChecks.Interact(pdfThumbnails, root, preview);
             MetadataChecks.Interact(root, preview);
+            LibraryChecks.Run(root, preview, playbackFixture);
             if (playbackFixture is { } fixture) { MediaPlaybackChecks.Run(fixture, preview); MediaEditorChecks.Run(fixture, root, preview); }
             Console.WriteLine("PASS: image/PDF/subtitle exports, originals, duplicate names, cancellation, invalid crop, Home render and Library shortcut; installed FFmpeg/LibreOffice checks included when available.");
         }

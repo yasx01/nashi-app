@@ -41,9 +41,14 @@ public sealed class LibraryStore
     }
     public void Record(string action,IEnumerable<string> paths)
     {
-        var existing=paths.Where(p=>File.Exists(p)||Directory.Exists(p)).Select(Path.GetFullPath).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var existing=paths.Where(p=>File.Exists(p)||Directory.Exists(p)).Select(Path.GetFullPath).Distinct(OperatingSystem.IsWindows()?StringComparer.OrdinalIgnoreCase:StringComparer.Ordinal).ToArray();
         if(existing.Length==0)return;
         Save(state with{Entries=new[]{new LibraryEntry(Guid.NewGuid(),DateTimeOffset.Now,action,existing)}.Concat(state.Entries).Take(Limit).ToList()});
+    }
+    public void Forget(IEnumerable<Guid> ids)
+    {
+        ArgumentNullException.ThrowIfNull(ids); var removed = ids.ToHashSet();
+        if (removed.Count > 0) Save(state with{Entries=state.Entries.Where(entry=>!removed.Contains(entry.Id)).ToList()});
     }
     public void SetAppearance(string appearance)=>Save(state with{Appearance=ValidAppearance(appearance)});
     public void SetWindowManagement(bool enabled)=>Save(state with{WindowManagementEnabled=enabled});

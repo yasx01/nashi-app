@@ -9,6 +9,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
+using Avalonia.VisualTree;
 using Nashi.Core;
 
 namespace Nashi.Linux;
@@ -16,6 +17,7 @@ namespace Nashi.Linux;
 public sealed class MainWindow : Window
 {
     private readonly List<string> files = [];
+    private readonly HashSet<Guid> selectedLibrary = [];
     private readonly LibraryStore library;
     private readonly Toolchain tools;
     private readonly StackPanel home = new() { Spacing = 10 }, libraryPage = new() { Spacing = 12 };
@@ -89,16 +91,33 @@ public sealed class MainWindow : Window
         heading.Children.Add(Label("Yeni hazırlananlar", 20)); home.Children.Add(heading); home.Children.Add(recent);
         home.Children.Add(Label("Fedora sürümü · Dışa aktarmalar yeni dosya olarak kaydedilir.", 11, true));
         libraryPage.Children.Add(Label("Kitaplığın", 30)); libraryPage.Children.Add(Label("Yeni hazırlanmış, yeniden işlemeye hazır.", 14, true));
-        libraryPage.Children.Add(search); libraryPage.Children.Add(libraryRows); search.TextChanged += (_, _) => RenderLibrary();
+        libraryPage.Children.Add(search);
+        var libraryActions = new WrapPanel();
+        libraryActions.Children.Add(Button("Seçilenleri önizle", async () => { await new FilePreviewWindow(this, SelectedLibraryPaths(), tools).ShowDialog(this); }));
+        libraryActions.Children.Add(Button("Seçilenleri kullan", () => { files.Clear(); AddFiles(SelectedLibraryPaths()); ShowLibrary(false); return Task.CompletedTask; }));
+        libraryActions.Children.Add(Button("Tümünü seç", () => { foreach (var entry in library.Search(search.Text ?? "", "tr")) selectedLibrary.Add(entry.Id); RenderLibrary(); return Task.CompletedTask; }));
+        libraryActions.Children.Add(Button("Seçimi temizle", () => { selectedLibrary.Clear(); RenderLibrary(); return Task.CompletedTask; }));
+        libraryActions.Children.Add(Button("Geçmişten kaldır", () => { library.Forget(selectedLibrary); selectedLibrary.Clear(); RenderLibrary(); status.Text = "Geçmiş güncellendi. Dosyaların korundu."; return Task.CompletedTask; }));
+        libraryPage.Children.Add(libraryActions); libraryPage.Children.Add(libraryRows); search.TextChanged += (_, _) => RenderLibrary();
         DragDrop.SetAllowDrop(this, true);
-        AddHandler(DragDrop.DragOverEvent, (_, e) => { e.DragEffects = operation is null && e.DataTransfer.Contains(DataFormat.File) ? DragDropEffects.Copy : DragDropEffects.None; e.Handled = true; });
-        AddHandler(DragDrop.DropEvent, (_, e) => { if (operation is null) AddFiles(e.DataTransfer.TryGetFiles()?.Select(p => p.TryGetLocalPath()).OfType<string>() ?? []); e.Handled = true; });
+        AddHandler(DragDrop.DragOverEvent, (_, e) => { e.DragEffects = operation is null && (e.DataTransfer.Contains(DataFormat.File) || e.DataTransfer.Contains(DataFormat.Bitmap)) ? DragDropEffects.Copy : DragDropEffects.None; e.Handled = true; });
+        AddHandler(DragDrop.DropEvent, async (_, e) =>
+        {
+            e.Handled = true; if (operation is not null) return;
+            await Safely(() =>
+            {
+                var dropped = e.DataTransfer.TryGetFiles();
+                if (dropped is { Length: > 0 }) AddFiles(dropped.Select(p => p.TryGetLocalPath()).OfType<string>());
+                else if (e.DataTransfer.TryGetBitmap() is { } bitmap) Import(ClipboardImport.Image(bitmap, library.DirectoryPath), "Bırakılan görsel");
+                return Task.CompletedTask;
+            });
+        });
         KeyDown += async (_, e) =>
         {
             if (operation is not null) return;
             if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.O) { e.Handled = true; await Safely(Choose); }
             if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.Space) { e.Handled = true; await Safely(OpenWheel); }
-            if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.V && e.Source is not TextBox) { e.Handled = true; await Safely(Paste); }
+            if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.V && !(e.Source is Control source && source.GetSelfAndVisualAncestors().Any(control => control is TextBox))) { e.Handled = true; await Safely(Paste); }
             if (e.KeyModifiers == KeyModifiers.Control && e.Key is Key.D2 or Key.F) { e.Handled = true; ShowLibrary(true); search.Focus(); }
             if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.D1) { e.Handled = true; ShowLibrary(false); }
         };
@@ -193,18 +212,26 @@ public sealed class MainWindow : Window
         if (Clipboard is null) return;
         var copied = await Clipboard.TryGetFilesAsync();
         if (copied is { Length: > 0 }) { AddFiles(copied.Select(p => p.TryGetLocalPath()).OfType<string>()); return; }
+        // In-process clipboard data can borrow the source application's bitmap.
+        var bitmap = await Clipboard.TryGetBitmapAsync();
+        if (bitmap is not null) { Import(await Task.Run(() => ClipboardImport.Image(bitmap, library.DirectoryPath)), "Yapıştırılan görsel"); return; }
         var text = await Clipboard.TryGetTextAsync();
-        if (string.IsNullOrWhiteSpace(text)) return;
+        if (string.IsNullOrWhiteSpace(text)) { status.Text = "Önce bir dosya, görsel veya metin kopyala."; return; }
         var paths = text.Split('\n').Select(p => p.Trim()).Select(p => Uri.TryCreate(p, UriKind.Absolute, out var uri) && uri.IsFile ? uri.LocalPath : p).ToArray();
         if (paths.All(p => File.Exists(p) || Directory.Exists(p))) AddFiles(paths);
         else if (Uri.TryCreate(text.Trim(), UriKind.Absolute, out var link) && link.Scheme is "https" or "http") await Download(text.Trim());
-        else
-        {
-            var folder = Path.Combine(library.DirectoryPath, "Clipboard"); Directory.CreateDirectory(folder);
-            var path = SafePaths.Unique(folder, "Yapıştırılan metin.txt"); await File.WriteAllTextAsync(path, text); library.Record("Paste", [path]); AddFiles([path]); RenderLibrary();
-        }
+        else Import(await Task.Run(() => ClipboardImport.Text(text, library.DirectoryPath)), "Yapıştırılan metin");
     }
     private void ShowLibrary(bool show) { home.IsVisible = !show; libraryPage.IsVisible = show; RenderLibrary(); }
+    private void Import(string path, string label)
+    {
+        AddFiles([path]); library.Record(label, [path]); RenderLibrary(); status.Text = label + " içe alındı.";
+    }
+    private string[] SelectedLibraryPaths()
+    {
+        var paths = library.Entries.Where(entry => selectedLibrary.Contains(entry.Id)).SelectMany(entry => entry.Paths).Distinct(StringComparer.Ordinal).ToArray();
+        if (paths.Length == 0) throw new ArgumentException("Kitaplıktan en az bir kayıt seç."); return paths;
+    }
     private void RenderLibrary()
     {
         recent.Children.Clear(); libraryRows.Children.Clear();
@@ -215,9 +242,16 @@ public sealed class MainWindow : Window
     }
     private Control LibraryRow(LibraryEntry entry)
     {
-        var row = new DockPanel(); var reuse = Button("Yeniden kullan ↗", () => { files.Clear(); AddFiles(entry.AvailablePaths); ShowLibrary(false); return Task.CompletedTask; });
-        reuse.IsEnabled = entry.AvailablePaths.Length > 0; DockPanel.SetDock(reuse, Dock.Right); row.Children.Add(reuse);
-        var title = new StackPanel { Spacing = 5 }; title.Children.Add(Label(entry.Name, 13)); title.Children.Add(Label(entry.Action + " · " + entry.Created.ToLocalTime().ToString("g"), 11, true)); row.Children.Add(title);
+        var row = new DockPanel(); var checkbox = new CheckBox { IsChecked = selectedLibrary.Contains(entry.Id), Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
+        AutomationProperties.SetName(checkbox, entry.Name + " kaydını seç");
+        checkbox.IsCheckedChanged += (_, _) => { if (checkbox.IsChecked == true) selectedLibrary.Add(entry.Id); else selectedLibrary.Remove(entry.Id); RenderLibrary(); };
+        DockPanel.SetDock(checkbox, Dock.Left); row.Children.Add(checkbox);
+        var actions = Row(); DockPanel.SetDock(actions, Dock.Right); row.Children.Add(actions);
+        var reuse = Button("Yeniden kullan ↗", () => { files.Clear(); AddFiles(entry.AvailablePaths); ShowLibrary(false); return Task.CompletedTask; });
+        var preview = Button("Önizle", async () => { await new FilePreviewWindow(this, entry.Paths, tools).ShowDialog(this); });
+        reuse.IsEnabled = entry.AvailablePaths.Length > 0; actions.Children.Add(preview); actions.Children.Add(reuse);
+        var title = new StackPanel { Spacing = 5 }; title.Children.Add(Label(entry.Name, 13)); title.Children.Add(Label(entry.Action + " · " + entry.Created.ToLocalTime().ToString("g"), 11, true));
+        var missing = entry.Paths.Length - entry.AvailablePaths.Length; if (missing > 0) title.Children.Add(Label($"{missing} dosya artık bu konumda bulunmuyor.", 11, true)); row.Children.Add(title);
         var card = Card(row); card.Padding = new Thickness(14); return card;
     }
 
@@ -405,9 +439,9 @@ public sealed class MainWindow : Window
     private async Task Setup()
     {
         var panel = new StackPanel { Spacing = 12 }; panel.Children.Add(Label("Medya araçları", 25));
-        panel.Children.Add(Label("FFmpeg, yt-dlp ve Deno eksikse özgün kaynaklarından indirilir ve sağlama toplamları doğrulanır. İndirme birkaç yüz MB olabilir. Sistem paketlerin değiştirilmez.", 14));
+        panel.Children.Add(Label("Tam kodek desteği için FFmpeg, yt-dlp ve Deno özgün kaynaklarından kullanıcı klasörüne indirilir; sağlama toplamları doğrulanır. İndirme birkaç yüz MB olabilir. Sistem paketlerin değiştirilmez.", 14));
         var dialog = Dialog("Araç kurulumu", panel);
-        panel.Children.Add(Button("Eksik araçları indir", async () => { dialog.Close(); await Run("Kurulum", async (p, t) => { await tools.InstallAsync(p, t); return []; }); status.Text = "Medya araçları hazır."; }, true));
+        panel.Children.Add(Button("Medya araçlarını kur", async () => { dialog.Close(); await Run("Kurulum", async (p, t) => { await new Toolchain(tools.DirectoryPath).InstallAsync(p, t); return []; }); status.Text = "Medya araçları hazır."; }, true));
         await dialog.ShowDialog(this);
     }
     private Task Download() => Download("");

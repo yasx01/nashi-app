@@ -106,8 +106,8 @@ internal sealed class MediaEditorWindow : Window
         Choice("depth", "Ses örnek derinliği", ["matchSource", "pcm16", "pcm24", "pcm32", "float32"]);
         if (info.Video is not null)
         {
-            Number("maxHeight", "En fazla video yüksekliği (0: özgün)", 0, 0, 16384);
-            Number("gifFps", "GIF kare hızı", 15, 1, 60); Number("gifWidth", "GIF genişliği", 960, 16, 4096);
+            Number("maxHeight", "En fazla video yüksekliği (0: özgün)", 0, 0, 8192);
+            Number("gifFps", "GIF kare hızı", 15, 1, 60); Number("gifWidth", "GIF genişliği", 960, 16, 8192);
         }
         settings.Children.Add(preserve);
         settings.Children.Add(host.Button("İşlenmiş çıktıyı önizle", ProcessPreview));
@@ -306,7 +306,7 @@ internal sealed class MediaEditorWindow : Window
         try
         {
             canvas.ClearImage(); playback?.Dispose(); playback = null; processed = false; rangeEnd = null; canvas.Mode = action is "cropVideo" or "redactVideo" ? "crop" : "view";
-            var still = await Artwork(inputs[0], info, cancellation.Token);
+            var still = await MediaPlayback.ArtworkAsync(tools, temporary, inputs[0], info, cancellation.Token);
             if (closed) return; canvas.SetImage(still);
             OpenPlayer(inputs[0], info); position.IsEnabled = info.Duration > 0;
             message.Text = "Özgün dosya · Oynatmak için Space. Dışa aktarma özgün dosyayı kullanır.";
@@ -326,7 +326,7 @@ internal sealed class MediaEditorWindow : Window
         else
         {
             var previewInfo = await engine.InspectAsync(path, token);
-            canvas.SetImage(await Artwork(path, previewInfo, token)); OpenPlayer(path, previewInfo);
+            canvas.SetImage(await MediaPlayback.ArtworkAsync(tools, temporary, path, previewInfo, token)); OpenPlayer(path, previewInfo);
         }
         message.Text = "İşlenmiş çıktı · " + Path.GetFileName(path) + " · oynatmak için Space.";
     }
@@ -355,13 +355,5 @@ internal sealed class MediaEditorWindow : Window
             using var strip = images.AppendHorizontally(); return strip.ToByteArray(MagickFormat.Png);
         }, token);
     }
-    private async Task<byte[]> Artwork(string path, MediaInfo media, CancellationToken token)
-    {
-        var output = Path.Combine(temporary, Guid.NewGuid().ToString("N") + ".png");
-        string[] args = media.Video is not null ? ["-i", path, "-map", "0:v:0", "-frames:v", "1", "-vf", "scale=1280:720:force_original_aspect_ratio=decrease"] :
-            ["-i", path, "-filter_complex", "aformat=channel_layouts=mono,showwavespic=s=1200x140:colors=0xe5bc59", "-frames:v", "1"];
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token); timeout.CancelAfter(TimeSpan.FromMinutes(2));
-        await ProcessRunner.RunAsync(tools.Executable("ffmpeg"), ["-v", "error", "-nostdin", .. args, output], timeout.Token);
-        return await File.ReadAllBytesAsync(output, token);
-    }
+
 }

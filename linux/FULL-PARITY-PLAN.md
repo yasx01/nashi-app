@@ -69,3 +69,12 @@ Yalnızca katalogda görünmesi veya genel derleme testinin geçmesi yeterli de�
 - PDF sıkıştırma: tarama dosyası gerçek hedef boyuta indi ve tekrar görüntülendi;
   özellikler korundu. Formlu PDF byte düzeyinde aynı kaldı; ulaşılamayan hedefte
   yarım çıktı yayımlanmadı. Ortak motor sıkıştırması imza/form/ekleri koruyor.
+- Pano/kitaplık: metin ve görsel içe alma, aynı görseli iki kez yapıştırma,
+  metin boyutu sınırı, çoklu seçim ve geçmişten kaldırma testleri geçti. Geçmişten
+  kaldırmak dosyaları silmiyor; Linux'ta büyük/küçük harfle ayrılan yollar korunuyor.
+- Ortak önizleme penceresi: PDF sayfa geçişi/şifre, metni çalıştırmadan gösterme,
+  eksik dosya, gömülü medya ve hızlı dosya geçişinde eski yüklemeleri iptal etme
+  testleri geçti. Pencere kapanışı medya ve geçici önizleme dosyalarını temizler.
+- Medya/OCR commit'i df11170 ve üst veri/PDF commit'i b395e9c temiz Fedora
+  koşularında RPM üretimi, kurulum sonrası test ve yerel pencere kontrolünü geçti
+  (44778026475, 44779415243). Bunlar tam sürüm kabul listesinin tamamı değildir.
