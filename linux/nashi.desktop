@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Nashi
+Comment=Local file conversion and editing
+Comment[tr]=Yerel dosya dönüştürme ve düzenleme
+Exec=/opt/nashi/Nashi.Linux %F
+Icon=nashi
+Terminal=false
+Categories=Utility;FileTools;
+StartupWMClass=Nashi.Linux

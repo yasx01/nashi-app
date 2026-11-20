@@ -1,0 +1,50 @@
+name: Fedora desktop release checks
+on:
+  push:
+    branches: [fedora-port]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: fedora-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  fedora:
+    runs-on: ubuntu-24.04
+    container: fedora:44
+    timeout-minutes: 30
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+    steps:
+      - name: Install Fedora build and test dependencies
+        run: dnf install -y git tar gzip curl python3 rpm-build dotnet-sdk-10.0 fontconfig libX11 libICE libSM libXrandr libXi libXcursor mesa-libGL ffmpeg-free libreoffice-writer
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - name: Restore locked dependencies and build
+        run: |
+          dotnet restore linux/Nashi.Linux -r linux-x64 --locked-mode
+          dotnet build linux/Nashi.Linux -c Release --no-restore
+          dotnet restore windows/Nashi.Verify --locked-mode
+      - name: Verify shared engine and Fedora desktop flows
+        run: |
+          dotnet run --project windows/Nashi.Verify -c Release --no-restore
+          dotnet run --project linux/Nashi.Linux -c Release --no-build -- --self-test build/fedora-preview.png
+      - name: Build and verify self-contained RPM
+        run: |
+          bash scripts/build-fedora.sh
+          build/fedora/app/Nashi.Linux --self-test build/packaged-preview.png
+          cd build/fedora
+          sha256sum -c SHA256SUMS
+          rpm -K nashi-*.rpm
+          dnf install -y ./nashi-*.rpm
+          /opt/nashi/Nashi.Linux --self-test /tmp/nashi-installed-preview.png
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: nashi-fedora-x86_64
+          path: |
+            build/fedora/*.rpm
+            build/fedora/*.tar.gz
+            build/fedora/SHA256SUMS
+            build/*preview*.png

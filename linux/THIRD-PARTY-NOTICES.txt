@@ -1,0 +1,22 @@
+Nashi Fedora port
+
+Original Nashi source and artwork: Copyright (c) 2026 Orkun Işıtmak
+and Nashi contributors, MIT. The original LICENSE accompanies this package.
+
+This port reuses Nashi.Core. Its dependency and external-tool notices are
+included in UPSTREAM-NOTICES.txt; external media tools are not in this package.
+
+Additional UI/runtime components:
+- Avalonia, Avalonia.Desktop, Avalonia.Themes.Fluent, Avalonia.Headless:
+  MIT, https://github.com/AvaloniaUI/Avalonia/blob/master/licence.md
+- SkiaSharp: MIT, https://github.com/mono/SkiaSharp/blob/main/LICENSE.md
+  Skia native code: BSD-3-Clause and third-party licenses shipped upstream.
+- HarfBuzzSharp: MIT wrapper; HarfBuzz uses the MIT-style Old MIT license.
+- .NET runtime: MIT, https://github.com/dotnet/runtime/blob/main/LICENSE.TXT
+  Runtime third-party notices accompany the self-contained distribution.
+
+Exact transitive dependency versions are pinned in linux/Nashi.Linux/packages.lock.json
+and windows/Nashi.Core/packages.linux-x64.lock.json. Package metadata and available
+full license texts, native dependency notices and .NET runtime notices are included
+in the licenses/ directory. This package is an independent port,
+not an official upstream Nashi release.

@@ -1,3 +1,5 @@
+> **Fedora Linux fork:** [Download Fedora 0.1.0](https://github.com/yasx01/nashi-app/releases/tag/fedora-v0.1.0) · [Installation and feature status](linux/README.md). Independent port; remaining platform differences are documented.
+
 <p align="center"><img src="Resources/Brand/NashiIcon.png" width="128" alt="Nashi"></p>
 <h1 align="center">Nashi</h1>
 <p align="center">Your files, a little sweeter. · Dosyaların için tatlı bir kolaylık.</p>
@@ -25,6 +27,8 @@ A real macOS 0.7.3 screen recording: drag files in Finder, use the wheel to conv
 Windows screenshot: native UI test capture from the released 0.7.5 code, verified in [PR #1](https://github.com/orkunisitmak/nashi-app/pull/1). Demo files contain Nashi's own artwork; no personal files or account details are shown.
 
 ## Download and use
+
+- **Fedora Linux:** [independent Fedora release, installation and supported features](linux/README.md).
 
 - **[macOS ZIP · Apple Silicon, macOS 13+](https://github.com/orkunisitmak/nashi-app/releases/latest/download/Nashi-macOS-arm64.zip):** extract, move Nashi.app to your Applications folder and open it. The full macOS catalog has 27 tools, 46 input formats and 300 conversion routes.
 - **[Windows x64 ZIP](https://github.com/orkunisitmak/nashi-app/releases/latest/download/Nashi-Windows-x64.zip):** extract the entire archive into its own writable folder, then open Nashi.exe. No separate .NET install is required. Keep the folder together so portable updates can replace the app safely. [Windows features and differences](windows/README.md).

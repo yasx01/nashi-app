@@ -1,3 +1,5 @@
+> **Fedora Linux forku:** [Fedora 0.1.0 sürümünü indir](https://github.com/yasx01/nashi-app/releases/tag/fedora-v0.1.0) · [Kurulum ve özellik durumu](linux/README.md). Bağımsız uyarlama; kalan farklar belgelenmiştir.
+
 # Nashi
 
 [English](README.md) · [Türkçe özellikler ve kısayollar](https://orkunisitmak.github.io/nashi-app/tr/) · [Son sürüm](https://github.com/orkunisitmak/nashi-app/releases/latest)
