@@ -16,7 +16,7 @@ public sealed class Operations(Toolchain tools)
         return FeatureCatalog.Tools(inputs).Where(id => id == "readQRCode" ||
             (inputs.All(FeatureCatalog.IsImage) ? true :
             inputs.All(p => FeatureCatalog.IsAudio(p) || FeatureCatalog.IsVideo(p)) ?
-                id is "compress" or "normalizeAudio" or "muteVideo" or "trimVideo" or "trimAudio" or "changeVideoSpeed" or "joinVideos" or "videoSnapshots" or "removeMetadata" or "audioChannels" or "splitVideo" or "audioToVideo" :
+                MediaEngine.Tools.Contains(id) :
             inputs.All(p => FeatureCatalog.Extension(p) == "pdf") ? id is "mergePDF" or "splitPDF" or "organizePDF" or "compress" or "removeMetadata" :
             inputs.All(FeatureCatalog.IsArchive) && id == "extractArchive")).ToArray();
     }

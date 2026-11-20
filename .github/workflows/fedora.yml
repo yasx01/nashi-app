@@ -12,13 +12,16 @@ jobs:
   fedora:
     runs-on: ubuntu-24.04
     container: fedora:44
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
       DOTNET_NOLOGO: '1'
+      NASHI_TEST_FULL_MEDIA: '1'
+      NASHI_VERIFY_DOWNLOAD_TOOLS: '1'
+      NASHI_VERIFY_TOOLS_DIRECTORY: /tmp/nashi-fedora-test-tools
     steps:
       - name: Install Fedora build and test dependencies
-        run: dnf install -y git tar gzip curl python3 rpm-build dotnet-sdk-10.0 fontconfig libX11 libICE libSM libXrandr libXi libXcursor mesa-libGL ffmpeg-free libreoffice-writer libreoffice-calc libreoffice-impress poppler-utils tesseract tesseract-langpack-eng tesseract-langpack-tur xorg-x11-server-Xvfb xorg-x11-xauth
+        run: dnf install -y git tar gzip curl python3 rpm-build dotnet-sdk-10.0 fontconfig libX11 libICE libSM libXrandr libXi libXcursor mesa-libGL ffmpeg-free libreoffice-writer libreoffice-calc libreoffice-impress poppler-utils tesseract tesseract-langpack-eng tesseract-langpack-tur xorg-x11-server-Xvfb xorg-x11-xauth vlc-libs vlc-plugins-base vlc-plugin-ffmpeg vlc-plugin-pulseaudio
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           persist-credentials: false

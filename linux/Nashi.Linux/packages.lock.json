@@ -33,6 +33,12 @@
           "Avalonia": "11.3.23"
         }
       },
+      "LibVLCSharp": {
+        "type": "Direct",
+        "requested": "[3.10.2, )",
+        "resolved": "3.10.2",
+        "contentHash": "WNLHBIK5QcOH0kNGBGupKC9Ds3hksPthHyp6ueE8zG5Hy/6EBwAU0BbMqukBCdLatCOY+V9DYHDwSVSXSmPGSA=="
+      },
       "Avalonia": {
         "type": "Transitive",
         "resolved": "11.3.23",

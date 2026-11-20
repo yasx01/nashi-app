@@ -2,7 +2,7 @@ Name:           nashi
 Version:        0.1.0
 Release:        1%{?dist}
 Summary:        Nashi file toolkit — experimental Fedora port
-License:        MIT AND Apache-2.0 AND BSD-3-Clause
+License:        MIT AND Apache-2.0 AND BSD-3-Clause AND LGPL-2.1-or-later
 URL:            https://github.com/yasx01/nashi-app
 Source0:        nashi-linux-x64.tar.gz
 ExclusiveArch:  x86_64
@@ -11,6 +11,7 @@ Requires:       glibc, libstdc++, zlib, openssl-libs, libicu
 Requires:       fontconfig, libX11, libICE, libSM, libXrandr, libXi, libXcursor
 Requires:       mesa-libGL, xorg-x11-server-Xwayland
 Requires:       poppler-utils, tesseract, tesseract-langpack-eng
+Requires:       vlc-libs, vlc-plugins-base, vlc-plugin-ffmpeg, vlc-plugin-pulseaudio
 Recommends:     tesseract-langpack-tur
 Recommends:     libreoffice
 

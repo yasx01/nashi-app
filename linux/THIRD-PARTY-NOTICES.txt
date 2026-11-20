@@ -14,6 +14,10 @@ Additional UI/runtime components:
 - HarfBuzzSharp: MIT wrapper; HarfBuzz uses the MIT-style Old MIT license.
 - .NET runtime: MIT, https://github.com/dotnet/runtime/blob/main/LICENSE.TXT
   Runtime third-party notices accompany the self-contained distribution.
+- LibVLCSharp 3.10.2: LGPL-2.1-or-later, VideoLAN and contributors.
+  Source and replacement libraries: https://code.videolan.org/videolan/LibVLCSharp
+  The wrapper remains a separate replaceable DLL. Native libVLC and its plugins,
+  Poppler and Tesseract are installed from Fedora packages rather than bundled.
 
 Exact transitive dependency versions are pinned in linux/Nashi.Linux/packages.lock.json
 and windows/Nashi.Core/packages.linux-x64.lock.json. Package metadata and available

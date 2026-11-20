@@ -10,6 +10,8 @@ namespace Nashi.Linux;
 internal sealed class ImageCanvas : Control, IDisposable
 {
     private Bitmap? bitmap;
+    private bool ownsBitmap = true;
+    internal ImageArea[] Regions { get; set; } = [];
     private ImagePoint? start;
     private ImageArea? beforeCrop;
     private ImageMark? beforeMove;
@@ -18,6 +20,7 @@ internal sealed class ImageCanvas : Control, IDisposable
     private bool movingCrop, resizingCrop;
     public int ImageWidth { get; }
     public int ImageHeight { get; }
+    internal double PixelAspect { get; set; } = 1;
     public string Mode { get; set; } = "rectangle";
     public string Ink { get; set; } = "#FF5200";
     public double Stroke { get; set; } = 3;
@@ -43,7 +46,7 @@ internal sealed class ImageCanvas : Control, IDisposable
     {
         get
         {
-            var width = Mode == "view" && bitmap is not null ? bitmap.PixelSize.Width : ImageWidth;
+            var width = Mode == "view" && bitmap is not null ? bitmap.PixelSize.Width : ImageWidth * PixelAspect;
             var height = Mode == "view" && bitmap is not null ? bitmap.PixelSize.Height : ImageHeight;
             var scale = Math.Min(Math.Max(1, Bounds.Width - 24) / width, Math.Max(1, Bounds.Height - 24) / height);
             return new Rect((Bounds.Width - width * scale) / 2, (Bounds.Height - height * scale) / 2, width * scale, height * scale);
@@ -58,8 +61,10 @@ internal sealed class ImageCanvas : Control, IDisposable
     private Rect View(ImageArea r) => new(View(new ImagePoint(r.X, r.Y)), View(new ImagePoint(r.Right, r.Bottom)));
     public void SetImage(byte[] png)
     {
-        using var stream = new MemoryStream(png); var next = new Bitmap(stream); var old = bitmap; bitmap = next; old?.Dispose(); InvalidateVisual();
+        using var stream = new MemoryStream(png); var next = new Bitmap(stream); if (ownsBitmap) bitmap?.Dispose(); bitmap = next; ownsBitmap = true; InvalidateVisual();
     }
+    internal void SetFrame(Bitmap frame) { if (ownsBitmap) bitmap?.Dispose(); bitmap = frame; ownsBitmap = false; InvalidateVisual(); }
+    internal void ClearImage() { if (ownsBitmap) bitmap?.Dispose(); bitmap = null; ownsBitmap = true; InvalidateVisual(); }
     public void Undo()
     {
         if (undo.TryPop(out var previous)) { Marks.Clear(); Marks.AddRange(previous); Selected = -1; Changed?.Invoke(); InvalidateVisual(); }
@@ -157,6 +162,7 @@ internal sealed class ImageCanvas : Control, IDisposable
     {
         base.Render(context); context.FillRectangle(new SolidColorBrush(Color.Parse("#151F18")), Bounds.WithX(0).WithY(0));
         if (bitmap is not null) context.DrawImage(bitmap, ImageBounds);
+        foreach (var region in Regions) context.DrawRectangle(new SolidColorBrush(Colors.Black, .65), new Pen(Brushes.Gold, 1), View(region));
         if (Mode == "crop" && Crop is { Width: >= 1, Height: >= 1 } crop)
         {
             var image = ImageBounds; var selected = View(crop); var shade = new SolidColorBrush(Colors.Black, .5);
@@ -177,5 +183,5 @@ internal sealed class ImageCanvas : Control, IDisposable
             else for (var i = 1; i < trail.Count; i++) context.DrawLine(pen, View(trail[i - 1]), View(trail[i]));
         }
     }
-    public void Dispose() { bitmap?.Dispose(); bitmap = null; }
+    public void Dispose() { if (ownsBitmap) bitmap?.Dispose(); bitmap = null; }
 }

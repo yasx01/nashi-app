@@ -266,12 +266,23 @@ public sealed class MainWindow : Window
         "convert" => "Dönüştür", "compress" => "Sıkıştır", "editImage" => "Fotoğrafı düzenle", "cropImage" => "Kırp", "removeMetadata" => "Metaveriyi sil", "readQRCode" => "QR oku",
         "normalizeAudio" => "Sesi dengele", "muteVideo" => "Sesi kaldır", "trimVideo" or "trimAudio" => "Kes", "changeVideoSpeed" => "Hızı değiştir",
         "joinVideos" => "Birleştir", "videoSnapshots" => "Kare al", "mergePDF" => "PDF birleştir", "splitPDF" => "PDF ayır", "extractArchive" => "Arşivi aç",
-        "audioChannels" => "Ses kanalları", "splitVideo" => "Videoyu böl", "audioToVideo" => "Ses görselleştir",
+        "audioChannels" => "Ses kanalları", "splitVideo" => "Videoyu böl", "audioToVideo" => "Ses görselleştir", "cropVideo" => "Videoyu kırp", "redactVideo" => "Videoyu sansürle", "redactAudio" => "Sesi sansürle",
         "annotateImage" => "Görsele not ekle", "frameImage" => "Arka plan ekle", "createCollage" => "Kolaj oluştur", "redactImage" => "Görseli sansürle", "createPDF" => "PDF oluştur", "organizePDF" => "PDF sayfalarını düzenle", _ => id
     };
     private async Task Edit(string action)
     {
         if (action == "readQRCode") { await ReadQr(); return; }
+        if (files.All(p => FeatureCatalog.IsAudio(p) || FeatureCatalog.IsVideo(p)))
+        {
+            var selected = files.ToArray(); MediaInfo? info = null;
+            await Run("Medya inceleniyor", async (_, token) => { info = await new MediaEngine(tools.Executable("ffmpeg"), tools.Executable("ffprobe")).InspectAsync(selected[0], token); return []; });
+            if (info is null) return;
+            var editor = new MediaEditorWindow(this, tools, action, selected, info); await editor.ShowDialog(this);
+            if (editor.Result is not { } options) return;
+            var folder = await Folder(this); if (folder is null) return;
+            await Run(ToolTitle(action), (p, t) => new Operations(tools).RunAsync(action, editor.Inputs, folder, editor.Format, (int)(options.Quality * 100), 0, 0, 0, 0, options, p, t));
+            return;
+        }
         if (action == "organizePDF")
         {
             var input = files[0]; var pdfPassword = await AskPassword("PDF sayfalarını düzenle"); if (pdfPassword is null) return;
@@ -318,7 +329,7 @@ public sealed class MainWindow : Window
             pagesPerFile = Number("Her dosyadaki sayfa sayısı", 1, 1, 1000);
             panel.Children.Add(Label("Sayfa aralığı (boş: tümü; örnek: 1-3, 5)", 12)); pageRanges = new TextBox(); panel.Children.Add(pageRanges);
         }
-        if (action is "mergePDF" or "joinVideos")
+        if (action == "mergePDF")
         {
             panel.Children.Add(Label("Birleştirme sırası", 12)); var list = new ListBox { ItemsSource = inputs.Select(Path.GetFileName).ToArray(), MaxHeight = 180 }; panel.Children.Add(list);
             var orderButtons = Row();
@@ -330,28 +341,13 @@ public sealed class MainWindow : Window
             }));
             panel.Children.Add(orderButtons);
         }
-        NumericUpDown? start = null, end = null, speed = null;
-        NumericUpDown? channels = null, clips = null, snapshot = null;
-        if (action is "trimVideo" or "trimAudio") { start = Number("Başlangıç (saniye)", 0, 0, 864000); end = Number("Bitiş (saniye)", 10, 0, 864000); }
-        if (action == "changeVideoSpeed") speed = Number("Hız çarpanı", 1, .25m, 4);
-        if (action == "audioChannels") channels = Number("Kanal sayısı (1: mono, 2: stereo)", 2, 1, 2);
-        if (action == "splitVideo") clips = Number("Eşit parça sayısı", 2, 2, 100);
-        if (action == "videoSnapshots") snapshot = Number("Kare zamanı (saniye)", 0, 0, 864000);
-        if (action == "audioToVideo") panel.Children.Add(Label("Ses dalgası içeren 1280 × 720 MP4 oluşturulur.", 12, true));
         panel.Children.Add(Label("Orijinaller korunur. Yeni dosyalar için bir klasör seçeceksin.", 12, true));
         var dialog = Dialog(ToolTitle(action), panel);
         panel.Children.Add(Button("Klasör seç ve kaydet", async () =>
         {
-            if (start is not null && end?.Value <= start.Value) throw new ArgumentException("Bitiş, başlangıçtan sonra olmalı.");
             var destination = await Folder(dialog); if (destination is null) return;
             var format = formats.SelectedItem as string ?? "";
-            var options = new MediaOptions
-            {
-                Quality = (double)(quality.Value ?? 85) / 100, Start = (double)(start?.Value ?? 0),
-                End = end is null ? null : (double)(end.Value ?? 0), Speed = (double)(speed?.Value ?? 1),
-                Channels = (int)(channels?.Value ?? 2), EqualClips = clips is null ? null : (int)(clips.Value ?? 2),
-                SnapshotTimes = [(double)(snapshot?.Value ?? 0)]
-            };
+            var options = new MediaOptions { Quality = (double)(quality.Value ?? 85) / 100 };
             var document = new DocumentOptions((int)(dpi?.Value ?? 144), layout?.SelectedIndex == 1 ? "preserve" : "editable", epubLayout?.SelectedIndex == 1 ? "fixed" : "reflowable", password?.Text ?? "");
             var pdf = new PdfEditOptions(PagesPerFile: (int)(pagesPerFile?.Value ?? 1), PageRanges: pageRanges?.Text ?? "");
             dialog.Close();

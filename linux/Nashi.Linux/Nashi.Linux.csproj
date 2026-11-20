@@ -17,6 +17,7 @@
     <PackageReference Include="Avalonia.Desktop" Version="11.3.23" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.23" />
     <PackageReference Include="Avalonia.Headless" Version="11.3.23" />
+    <PackageReference Include="LibVLCSharp" Version="3.10.2" />
     <AvaloniaResource Include="../../Resources/Brand/NashiMark*.png" Link="Assets/%(Filename)%(Extension)" />
     <AvaloniaResource Include="../../Resources/Brand/NashiIcon.png" Link="Assets/NashiIcon.png" />
     <Content Include="../../Resources/PagesInterop.js" Link="PagesInterop.js" CopyToOutputDirectory="PreserveNewest" />

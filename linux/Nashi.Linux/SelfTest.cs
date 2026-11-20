@@ -44,6 +44,7 @@ internal static class SelfTest
             Task.Run(() => ImageEditingChecks.Run(root)).GetAwaiter().GetResult();
             Task.Run(() => DocumentChecks.Run(root)).GetAwaiter().GetResult();
             var pdfThumbnails = Task.Run(() => PdfOrganizerChecks.Prepare(root)).GetAwaiter().GetResult();
+            var playbackFixture = Task.Run(() => MediaPlaybackChecks.Prepare(root)).GetAwaiter().GetResult();
             var window = new MainWindow(dataDirectory: Path.Combine(root, "library"));
             window.Show(); Dispatcher.UIThread.RunJobs();
             using (var frame = window.CaptureRenderedFrame() ?? throw new Exception("No rendered frame."))
@@ -72,6 +73,7 @@ internal static class SelfTest
             wheel.Close(); selectedWindow.Close();
             ImageEditorChecks.Run(root, preview);
             PdfOrganizerChecks.Interact(pdfThumbnails, root, preview);
+            if (playbackFixture is { } fixture) { MediaPlaybackChecks.Run(fixture, preview); MediaEditorChecks.Run(fixture, root, preview); }
             Console.WriteLine("PASS: image/PDF/subtitle exports, originals, duplicate names, cancellation, invalid crop, Home render and Library shortcut; installed FFmpeg/LibreOffice checks included when available.");
         }
         finally { Directory.Delete(root, true); }
@@ -129,16 +131,17 @@ internal static class SelfTest
         {
             var audio = Path.Combine(root, "audio.wav");
             await ProcessRunner.RunAsync("/usr/bin/ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=1", audio]);
-            var media = new Operations(new Toolchain(Path.Combine(root, "tools"), "/usr/bin"));
+            var mediaTools = new Toolchain(Environment.GetEnvironmentVariable("NASHI_VERIFY_TOOLS_DIRECTORY") ?? Path.Combine(root, "tools"), "/usr/bin");
+            var media = new Operations(mediaTools);
             var flac = await media.RunAsync("convert", [audio], target, "flac", 85, 0, 0, 0, 0, new(), progress, default);
-            var info = await new MediaEngine("/usr/bin/ffmpeg", "/usr/bin/ffprobe").InspectAsync(flac[0]);
+            var info = await new MediaEngine(mediaTools.Executable("ffmpeg"), mediaTools.Executable("ffprobe")).InspectAsync(flac[0]);
             Check(info.Duration > .9 && info.HasAudio, "Real audio export");
             var mono = await media.RunAsync("audioChannels", [audio], target, "", 85, 0, 0, 0, 0, new() { Channels = 1 }, progress, default);
-            Check((await new MediaEngine("/usr/bin/ffmpeg", "/usr/bin/ffprobe").InspectAsync(mono[0])).Audio!.Channels == 1, "Mono export");
+            Check((await new MediaEngine(mediaTools.Executable("ffmpeg"), mediaTools.Executable("ffprobe")).InspectAsync(mono[0])).Audio!.Channels == 1, "Mono export");
             if (Environment.GetEnvironmentVariable("NASHI_TEST_FULL_MEDIA") == "1")
             {
                 var visual = await media.RunAsync("audioToVideo", [audio], target, "", 85, 0, 0, 0, 0, new(), progress, default);
-                var engine = new MediaEngine("/usr/bin/ffmpeg", "/usr/bin/ffprobe");
+                var engine = new MediaEngine(mediaTools.Executable("ffmpeg"), mediaTools.Executable("ffprobe"));
                 var video = await engine.InspectAsync(visual.Single());
                 Check(video.Video is { Width: 1280, Height: 720 } && video.HasAudio, "Audio visualization video");
                 var parts = await media.RunAsync("splitVideo", visual.ToArray(), target, "", 85, 0, 0, 0, 0, new() { EqualClips = 2 }, progress, default);

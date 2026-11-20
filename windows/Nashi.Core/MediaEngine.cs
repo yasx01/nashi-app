@@ -10,6 +10,7 @@ public sealed record MediaInfo(double Duration, long Bytes, IReadOnlyList<MediaS
     public MediaStream? Video => Streams.FirstOrDefault(s => s.Kind == "video" && !s.AttachedPicture);
     public MediaStream? Audio => Streams.FirstOrDefault(s => s.Kind == "audio");
     public bool HasAudio => Streams.Any(s => s.Kind == "audio");
+    public string Container { get; init; } = "";
     /// Ogg keeps Vorbis and Opus comments on the audio stream rather than in file-level tags.
     public bool OggStreamTags { get; init; }
     /// Apple devices store location, make, model and capture date as com.apple.quicktime.* file tags.
@@ -92,7 +93,7 @@ public sealed class MediaEngine(string ffmpeg, string ffprobe)
         var quickTimeKeys=format.ValueKind==JsonValueKind.Object&&format.TryGetProperty("tags",out var formatTags)&&formatTags.ValueKind==JsonValueKind.Object&&formatTags.EnumerateObject().Any(t=>t.Name.StartsWith("com.apple.quicktime.",StringComparison.Ordinal));
         // FileInfo sizes a symbolic link itself; compression targets come from the media it points to (as on macOS).
         var file=new FileInfo(input);
-        return new(duration, (file.ResolveLinkTarget(true) as FileInfo??file).Length, streams){OggStreamTags=oggTags,QuickTimeKeys=quickTimeKeys};
+        return new(duration, (file.ResolveLinkTarget(true) as FileInfo??file).Length, streams){OggStreamTags=oggTags,QuickTimeKeys=quickTimeKeys,Container=format.ValueKind==JsonValueKind.Object?GetString(format,"format_name"):""};
     }
 
     // The end of the last packet, read by copying every stream to the null muxer without decoding.

@@ -53,3 +53,11 @@ Yalnızca katalogda görünmesi veya genel derleme testinin geçmesi yeterli de�
   Kullanıcı/sahip şifreleri, yanlış şifre ve aşırı büyük sayfa reddi doğrulandı.
 - Ortak motora taşıma sonrası Windows çapraz derlemesi sıfır hata/uyarıyla geçti;
   ortak motorun doğrulanan araçlarla 2.151 kontrolü yeniden geçti.
+- Medya düzenleyicisi: LibVLC ile uygulama içi video/ses oynatma, duraklatma,
+  ileri sarma ve yerel dosya sınırı gerçek çözme testinden geçti. Video kırpma,
+  zamanlı video sansürü, birden çok ses sansür aralığı ve işlenmiş dosya önizlemesi
+  gerçek fare/çıktı testleriyle doğrulandı. Test oynatımı sessiz ses çıkışı kullanır;
+  fiziksel hoparlör ve temiz Fedora codec kapsamı henüz doğrulanmadı.
+- Anotasyon fontu artık fontconfig'in verdiği dosyadan yükleniyor. Generic Magick
+  font adı dekoratif bir font seçiyordu; yeni tarama yerelde gerçek Tesseract ile
+  `FEDORA OCR TEST 123` metninin tamamını verdi. Temiz Fedora OCR tekrarı bekleniyor.

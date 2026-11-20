@@ -48,6 +48,14 @@ public sealed record ImageEditOptions
 
 internal static class ImageEditing
 {
+    private static readonly Lazy<string> AnnotationFont = new(() =>
+    {
+        // Magick's generic font alias can resolve to a decorative font instead of the desktop's sans face.
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var path = ProcessRunner.RunAsync("/usr/bin/fc-match", ["--format=%{file}", "sans-serif"], timeout.Token).GetAwaiter().GetResult().Output;
+        if (!Path.IsPathFullyQualified(path) || !File.Exists(path)) throw new FileNotFoundException("Çizim için sistem yazı tipi bulunamadı. fontconfig paketini kontrol et.");
+        return path;
+    });
     internal static void Canvas(int width, int height)
     {
         if (width < 1 || height < 1 || width > 30000 || height > 30000 || (long)width * height > 100_000_000)
@@ -141,7 +149,6 @@ internal static class ImageEditing
     internal static void Annotate(MagickImage image, ImageMark[] marks)
     {
         if (marks.Length == 0 || marks.Length > 1000) throw new ArgumentException("1–1.000 işaret ekle.");
-        MagickNET.SetFontConfigDirectory("/etc/fonts");
         foreach (var mark in marks)
         {
             mark.Area.Validate((int)image.Width, (int)image.Height);
@@ -154,7 +161,7 @@ internal static class ImageEditing
                 case "ellipse": draw.Ellipse(r.X + r.Width / 2, r.Y + r.Height / 2, r.Width / 2, r.Height / 2, 0, 360); break;
                 case "text":
                     if (string.IsNullOrWhiteSpace(mark.Text) || mark.Text.Length > 4096) throw new ArgumentException("1–4.096 karakterlik metin gir.");
-                    draw.StrokeColor(MagickColors.Transparent).FillColor(Color(mark.Color)).Font("sans-serif").FontPointSize(mark.FontSize).Text(r.X, r.Y + Math.Min(mark.FontSize, r.Height), mark.Text); break;
+                    draw.StrokeColor(MagickColors.Transparent).FillColor(Color(mark.Color)).Font(AnnotationFont.Value).FontPointSize(mark.FontSize).Text(r.X, r.Y + Math.Min(mark.FontSize, r.Height), mark.Text); break;
                 case "image":
                     using (var picture = PhotoCodec.Read(mark.ImagePath ?? throw new ArgumentException("Eklenecek görseli seç.")))
                     { picture.Resize(new MagickGeometry((uint)r.Width, (uint)r.Height) { IgnoreAspectRatio = true }); image.Composite(picture, (int)r.X, (int)r.Y, CompositeOperator.Over); }
