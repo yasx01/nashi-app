@@ -72,8 +72,10 @@ public sealed class MainWindow : Window
         caption.Children.Add(new TextBlock { Text = "✦  BURADAN BAŞLA", Foreground = Brush("#E8BF59"), FontSize = 11 });
         caption.Children.Add(selection);
         caption.Children.Add(Label("Görseller, videolar, belgeler ve aralarındaki küçük şeyler.", 12, true));
-        var picks = Row(); picks.Children.Add(Button("Dosya seç", Choose, true)); picks.Children.Add(Button("Yapıştır", Paste));
+        var picks = new WrapPanel { Orientation = Orientation.Horizontal };
+        picks.Children.Add(Button("Dosya seç", Choose, true)); picks.Children.Add(Button("Klasör seç", ChooseFolder)); picks.Children.Add(Button("Yapıştır", Paste));
         wheel = Button("Çarkı aç", OpenWheel, true); picks.Children.Add(wheel); caption.Children.Add(picks);
+        foreach (var control in picks.Children) control.Margin = new Thickness(0, 0, 6, 6);
         top.Children.Add(caption); var garden = Garden(); Grid.SetColumn(garden, 1); top.Children.Add(garden);
         drop.Children.Add(top); drop.Children.Add(new ScrollViewer { Content = selected, MaxHeight = 150 });
         drop.Children.Add(Label("Ctrl+O  Dosya seç     Ctrl+Space  Çark     Ctrl+V  Yapıştır", 11, true));
@@ -166,7 +168,7 @@ public sealed class MainWindow : Window
     }
     private void AddFiles(IEnumerable<string> paths)
     {
-        foreach (var path in paths.Where(File.Exists).Select(Path.GetFullPath)) if (!files.Contains(path)) files.Add(path);
+        foreach (var path in paths.Where(p => File.Exists(p) || Directory.Exists(p)).Select(Path.GetFullPath)) if (!files.Contains(path)) files.Add(path);
         selected.Children.Clear();
         foreach (var path in files)
         {
@@ -181,6 +183,11 @@ public sealed class MainWindow : Window
         var chosen = await StorageProvider.OpenFilePickerAsync(new() { Title = "Nashi için dosya seç", AllowMultiple = true });
         AddFiles(chosen.Select(p => p.TryGetLocalPath()).OfType<string>());
     }
+    private async Task ChooseFolder()
+    {
+        var chosen = await StorageProvider.OpenFolderPickerAsync(new() { Title = "Klasör veya belge paketi seç", AllowMultiple = true });
+        AddFiles(chosen.Select(p => p.TryGetLocalPath()).OfType<string>());
+    }
     private async Task Paste()
     {
         if (Clipboard is null) return;
@@ -189,7 +196,7 @@ public sealed class MainWindow : Window
         var text = await Clipboard.TryGetTextAsync();
         if (string.IsNullOrWhiteSpace(text)) return;
         var paths = text.Split('\n').Select(p => p.Trim()).Select(p => Uri.TryCreate(p, UriKind.Absolute, out var uri) && uri.IsFile ? uri.LocalPath : p).ToArray();
-        if (paths.All(File.Exists)) AddFiles(paths);
+        if (paths.All(p => File.Exists(p) || Directory.Exists(p))) AddFiles(paths);
         else if (Uri.TryCreate(text.Trim(), UriKind.Absolute, out var link) && link.Scheme is "https" or "http") await Download(text.Trim());
         else
         {
@@ -260,11 +267,22 @@ public sealed class MainWindow : Window
         "normalizeAudio" => "Sesi dengele", "muteVideo" => "Sesi kaldır", "trimVideo" or "trimAudio" => "Kes", "changeVideoSpeed" => "Hızı değiştir",
         "joinVideos" => "Birleştir", "videoSnapshots" => "Kare al", "mergePDF" => "PDF birleştir", "splitPDF" => "PDF ayır", "extractArchive" => "Arşivi aç",
         "audioChannels" => "Ses kanalları", "splitVideo" => "Videoyu böl", "audioToVideo" => "Ses görselleştir",
-        "annotateImage" => "Görsele not ekle", "frameImage" => "Arka plan ekle", "createCollage" => "Kolaj oluştur", "redactImage" => "Görseli sansürle", "createPDF" => "PDF oluştur", _ => id
+        "annotateImage" => "Görsele not ekle", "frameImage" => "Arka plan ekle", "createCollage" => "Kolaj oluştur", "redactImage" => "Görseli sansürle", "createPDF" => "PDF oluştur", "organizePDF" => "PDF sayfalarını düzenle", _ => id
     };
     private async Task Edit(string action)
     {
         if (action == "readQRCode") { await ReadQr(); return; }
+        if (action == "organizePDF")
+        {
+            var input = files[0]; var pdfPassword = await AskPassword("PDF sayfalarını düzenle"); if (pdfPassword is null) return;
+            byte[][]? images = null;
+            await Run("PDF önizleme", async (_, token) => { images = await LinuxPdf.RenderAsync(input, 36, token, pdfPassword); return []; });
+            if (images is null) return;
+            var organizer = new PdfOrganizerWindow(this, images); await organizer.ShowDialog(this);
+            if (organizer.Result is not { } result) return;
+            var folder = await Folder(this); if (folder is null) return;
+            await Run(ToolTitle(action), (p, t) => new Operations(tools).RunAsync(action, [input], folder, "", 85, 0, 0, 0, 0, new(), p, t, documentOptions: new(Password: pdfPassword), pdfOptions: result)); return;
+        }
         if (files.All(FeatureCatalog.IsImage) && action is not ("convert" or "removeMetadata"))
         {
             var selected = files.ToArray(); var editor = new ImageEditorWindow(this, action, selected);
@@ -284,6 +302,34 @@ public sealed class MainWindow : Window
             AutomationProperties.SetName(input, title); panel.Children.Add(input); return input;
         }
         var quality = Number("Kalite (%)", 85, 1, 100);
+        TextBox? password = null, pageRanges = null; NumericUpDown? dpi = null, pagesPerFile = null; ComboBox? layout = null, epubLayout = null;
+        if (inputs.Any(p => FeatureCatalog.Extension(p) == "pdf" || FeatureCatalog.IsArchive(p)))
+        {
+            panel.Children.Add(Label("Dosya şifresi (varsa)", 12)); password = new TextBox { PasswordChar = '●' }; panel.Children.Add(password);
+        }
+        if (action == "convert" && !inputs.All(p => FeatureCatalog.IsImage(p) || FeatureCatalog.IsAudio(p) || FeatureCatalog.IsVideo(p) || FeatureCatalog.IsArchive(p)))
+        {
+            dpi = Number("PDF görüntü çözünürlüğü (DPI)", 144, 36, 600);
+            panel.Children.Add(Label("PDF → belge yerleşimi", 12)); layout = new ComboBox { ItemsSource = new[] { "Düzenlenebilir metin", "Sayfa görünümünü koru" }, SelectedIndex = 0 }; panel.Children.Add(layout);
+            panel.Children.Add(Label("EPUB yerleşimi", 12)); epubLayout = new ComboBox { ItemsSource = new[] { "Akışkan metin", "Sabit sayfalar" }, SelectedIndex = 0 }; panel.Children.Add(epubLayout);
+        }
+        if (action == "splitPDF")
+        {
+            pagesPerFile = Number("Her dosyadaki sayfa sayısı", 1, 1, 1000);
+            panel.Children.Add(Label("Sayfa aralığı (boş: tümü; örnek: 1-3, 5)", 12)); pageRanges = new TextBox(); panel.Children.Add(pageRanges);
+        }
+        if (action is "mergePDF" or "joinVideos")
+        {
+            panel.Children.Add(Label("Birleştirme sırası", 12)); var list = new ListBox { ItemsSource = inputs.Select(Path.GetFileName).ToArray(), MaxHeight = 180 }; panel.Children.Add(list);
+            var orderButtons = Row();
+            foreach (var (title, step) in new[] { ("Yukarı", -1), ("Aşağı", 1) }) orderButtons.Children.Add(Button(title, () =>
+            {
+                var index = list.SelectedIndex; var next = index + step;
+                if (index >= 0 && next >= 0 && next < inputs.Length) { (inputs[index], inputs[next]) = (inputs[next], inputs[index]); list.ItemsSource = inputs.Select(Path.GetFileName).ToArray(); list.SelectedIndex = next; }
+                return Task.CompletedTask;
+            }));
+            panel.Children.Add(orderButtons);
+        }
         NumericUpDown? start = null, end = null, speed = null;
         NumericUpDown? channels = null, clips = null, snapshot = null;
         if (action is "trimVideo" or "trimAudio") { start = Number("Başlangıç (saniye)", 0, 0, 864000); end = Number("Bitiş (saniye)", 10, 0, 864000); }
@@ -306,9 +352,11 @@ public sealed class MainWindow : Window
                 Channels = (int)(channels?.Value ?? 2), EqualClips = clips is null ? null : (int)(clips.Value ?? 2),
                 SnapshotTimes = [(double)(snapshot?.Value ?? 0)]
             };
+            var document = new DocumentOptions((int)(dpi?.Value ?? 144), layout?.SelectedIndex == 1 ? "preserve" : "editable", epubLayout?.SelectedIndex == 1 ? "fixed" : "reflowable", password?.Text ?? "");
+            var pdf = new PdfEditOptions(PagesPerFile: (int)(pagesPerFile?.Value ?? 1), PageRanges: pageRanges?.Text ?? "");
             dialog.Close();
             await Run(ToolTitle(action), (p, t) => new Operations(tools).RunAsync(action, inputs, destination, format, (int)(quality.Value ?? 85),
-                0, 0, 0, 0, options, p, t));
+                0, 0, 0, 0, options, p, t, documentOptions: document, pdfOptions: pdf));
         }, true));
         await dialog.ShowDialog(this);
     }
@@ -338,16 +386,41 @@ public sealed class MainWindow : Window
         await dialog.ShowDialog(this);
     }
     private Task Download() => Download("");
-    private async Task ReadQr()
+    private async Task<string?> AskPassword(string title)
     {
+        var content = new StackPanel { Spacing = 12 }; content.Children.Add(Label(title, 24)); content.Children.Add(Label("PDF şifresi (varsa)", 13));
+        var field = new TextBox { PasswordChar = '●' }; content.Children.Add(field); var dialog = Dialog(title, content);
+        content.Children.Add(Button("Devam", () => { dialog.Close(field.Text ?? ""); return Task.CompletedTask; }, true));
+        dialog.Opened += (_, _) => field.Focus(); dialog.KeyDown += (_, e) => { if (e.Key == Key.Enter) { dialog.Close(field.Text ?? ""); e.Handled = true; } };
+        return await dialog.ShowDialog<string?>(this);
+    }
+    private async Task ReadQr(string? password = null)
+    {
+        if (password is null && files.Any(p => FeatureCatalog.Extension(p) == "pdf"))
+        {
+            var value = await AskPassword("PDF içinden QR oku"); if (value is not null) await ReadQr(value); return;
+        }
         var results = new List<string>();
-        await Run("QR oku", async (_, token) =>
+        await Run("QR oku", async (progress, token) =>
         {
             foreach (var file in files.ToArray())
             {
                 token.ThrowIfCancellationRequested();
-                var codes = await Task.Run(() => Operations.ReadQr(file), token);
-                results.Add(Path.GetFileName(file) + ":\n" + (codes.Length == 0 ? "QR kod bulunamadı." : string.Join("\n", codes)));
+                if (FeatureCatalog.Extension(file) == "pdf")
+                {
+                    var pages = await LinuxPdf.RenderAsync(file, 144, token, password ?? "");
+                    for (var index = 0; index < pages.Length; index++)
+                    {
+                        token.ThrowIfCancellationRequested(); var codes = await Task.Run(() => Operations.ReadQr(pages[index]), token);
+                        results.Add(Path.GetFileName(file) + $" · Sayfa {index + 1}:\n" + (codes.Length == 0 ? "QR kod bulunamadı." : string.Join("\n", codes)));
+                        progress.Report(new((index + 1d) / pages.Length, "QR kodlar taranıyor…"));
+                    }
+                }
+                else
+                {
+                    var codes = await Task.Run(() => Operations.ReadQr(file), token);
+                    results.Add(Path.GetFileName(file) + ":\n" + (codes.Length == 0 ? "QR kod bulunamadı." : string.Join("\n", codes)));
+                }
             }
             return [];
         });

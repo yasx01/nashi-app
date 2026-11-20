@@ -33,6 +33,7 @@ for name in ("PDFsharp-MIT.txt", "BouncyCastle-MIT.txt", "Magick.NET-THIRD-PARTY
     shutil.copy2(root / "windows/licenses" / name, output / name)
 for source in (root / "linux/licenses").iterdir():
     shutil.copy2(source, output / source.name)
+shutil.copytree(root / "Resources/licenses/cupertino-files", output / "cupertino-files", dirs_exist_ok=True)
 (output / "packages.json").write_text(json.dumps(inventory, indent=2) + "\n")
 assert any(item["package"].startswith("Avalonia/") for item in inventory)
 runtime = json.loads((output.parent / "Nashi.Linux.runtimeconfig.json").read_text())["runtimeOptions"]["includedFrameworks"][0]["version"]

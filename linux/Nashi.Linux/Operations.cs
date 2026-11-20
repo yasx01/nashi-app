@@ -7,33 +7,25 @@ namespace Nashi.Linux;
 public sealed class Operations(Toolchain tools)
 {
     private static readonly string[] ImageFormats = ["jpg", "png", "webp", "tiff", "avif", "bmp", "gif", "heic", "pdf"];
-    private static readonly string[] OfficeFormats = ["doc", "docx", "odt", "rtf", "txt", "md", "html", "xls", "xlsx", "ods", "csv", "tsv", "ppt", "pptx", "odp", "epub", "pdf"];
     public static string[] Formats(IReadOnlyList<string> inputs) => FeatureCatalog.Formats(inputs)
-        .Where(format => inputs.All(input => CanConvert(input, format))).ToArray();
-    private static bool CanConvert(string input, string format)
-    {
-        if (FeatureCatalog.IsImage(input)) return ImageFormats.Contains(format);
-        if (FeatureCatalog.IsAudio(input) || FeatureCatalog.IsVideo(input) || FeatureCatalog.IsArchive(input) || FeatureCatalog.Extension(input) is "srt" or "vtt") return true;
-        if (FeatureCatalog.Extension(input) == "pdf") return format is "txt" or "md";
-        return OfficeFormats.Contains(FeatureCatalog.Extension(input)) && OfficeFormats.Contains(format);
-    }
+        .Where(format => inputs.All(input => !FeatureCatalog.IsImage(input) || ImageFormats.Contains(format))).ToArray();
 
     public static string[] Tools(IReadOnlyList<string> inputs)
     {
         if (inputs.Count == 0) return [];
-        return FeatureCatalog.Tools(inputs).Where(id =>
-            inputs.All(FeatureCatalog.IsImage) ? true :
+        return FeatureCatalog.Tools(inputs).Where(id => id == "readQRCode" ||
+            (inputs.All(FeatureCatalog.IsImage) ? true :
             inputs.All(p => FeatureCatalog.IsAudio(p) || FeatureCatalog.IsVideo(p)) ?
                 id is "compress" or "normalizeAudio" or "muteVideo" or "trimVideo" or "trimAudio" or "changeVideoSpeed" or "joinVideos" or "videoSnapshots" or "removeMetadata" or "audioChannels" or "splitVideo" or "audioToVideo" :
-            inputs.All(p => FeatureCatalog.Extension(p) == "pdf") ? id is "mergePDF" or "splitPDF" or "compress" or "removeMetadata" :
-            inputs.All(FeatureCatalog.IsArchive) && id == "extractArchive").ToArray();
+            inputs.All(p => FeatureCatalog.Extension(p) == "pdf") ? id is "mergePDF" or "splitPDF" or "organizePDF" or "compress" or "removeMetadata" :
+            inputs.All(FeatureCatalog.IsArchive) && id == "extractArchive")).ToArray();
     }
 
     public async Task<IReadOnlyList<string>> RunAsync(string action, string[] inputs, string destination,
         string format, int quality, int width, int height, int x, int y, MediaOptions media,
-        IProgress<OperationProgress> progress, CancellationToken token, PhotoAdjustments? adjustments = null, ImageEditOptions? imageOptions = null)
+        IProgress<OperationProgress> progress, CancellationToken token, PhotoAdjustments? adjustments = null, ImageEditOptions? imageOptions = null, DocumentOptions? documentOptions = null, PdfEditOptions? pdfOptions = null)
     {
-        if (inputs.Length == 0 || inputs.Any(p => !File.Exists(p))) throw new ArgumentException("Var olan dosyaları seçin.");
+        if (inputs.Length == 0 || inputs.Any(p => !File.Exists(p) && !(Directory.Exists(p) && FeatureCatalog.Extension(p) is "pages" or "rtfd"))) throw new ArgumentException("Var olan dosyaları seçin.");
         if (action == "convert" ? !Formats(inputs).Contains(format) : !Tools(inputs).Contains(action))
             throw new ArgumentException("Bu işlem seçilen dosyalar için desteklenmiyor.");
         if (quality is < 1 or > 100) throw new ArgumentException("Kalite 1–100 arasında olmalı.");
@@ -57,46 +49,21 @@ public sealed class Operations(Toolchain tools)
             var encoder = needsEncoder ? tools.Executable("ffmpeg") : null;
             return await Task.Run(() => ImageEditing.Export(action, inputs, destination, format, options, encoder, progress, token), token);
         }
-        return await Task.Run<IReadOnlyList<string>>(async () =>
+        var document = documentOptions ?? new DocumentOptions();
+        if (action == "convert") return await new DocumentConversion(tools).ConvertAsync(inputs, format, destination, document, progress, token);
+        return await Task.Run<IReadOnlyList<string>>(() =>
         {
-            if (action != "convert" && inputs.All(p => FeatureCatalog.Extension(p) == "pdf"))
-                return DocumentEngine.Pdf(action == "mergePDF" ? "mergePDFs" : action, inputs, destination, token: token);
-            using var tx = new ExportTransaction(destination);
-            var outputs = new List<string>();
-            foreach (var input in inputs)
+            if (inputs.All(p => FeatureCatalog.Extension(p) == "pdf"))
             {
-                token.ThrowIfCancellationRequested();
-                progress.Report(new((double)outputs.Count / inputs.Length, Path.GetFileName(input)));
-                if (FeatureCatalog.IsArchive(input))
-                {
-                    outputs.AddRange(action == "extractArchive" ? ArchiveEngine.Extract(input, tx.StagingDirectory, token: token)
-                        : ArchiveEngine.Convert(input, format, tx.StagingDirectory, token: token));
-                    continue;
-                }
-                var targetFormat = action == "convert" ? format : FeatureCatalog.Extension(input) == "svg" ? "png" : FeatureCatalog.Extension(input);
-                var output = SafePaths.Unique(tx.StagingDirectory, Path.GetFileNameWithoutExtension(input) + " Nashi." + targetFormat);
-                if (FeatureCatalog.Extension(input) == "pdf") File.WriteAllText(output, OfficeDocuments.PdfText(input));
-                else if (FeatureCatalog.Extension(input) is "srt" or "vtt") File.WriteAllText(output, SubtitleCodec.Convert(LegacyTextCodec.Decode(File.ReadAllBytes(input)), format));
-                else
-                {
-                    if (!File.Exists("/usr/bin/libreoffice")) throw new FileNotFoundException("Belge dönüşümü için Fedora'nın LibreOffice paketini kurmalısın.");
-                    var work = Path.Combine(tx.StagingDirectory, "office-" + outputs.Count); Directory.CreateDirectory(work);
-                    var source = input;
-                    if (FeatureCatalog.Extension(input) is "txt" or "md" or "csv" or "tsv")
-                    {
-                        source = Path.Combine(work, Path.GetFileName(input));
-                        await LegacyTextCodec.ToUtf8Async(input, source, token);
-                    }
-                    if (FeatureCatalog.Extension(input) == "html")
-                    {
-                        source = Path.Combine(work, "Safe.html");
-                        await File.WriteAllTextAsync(source, OfficeDocuments.SanitizedHtml(await File.ReadAllTextAsync(input, token)), token);
-                    }
-                    var converted = await new OfficeDocuments("/usr/bin/libreoffice", "", AppContext.BaseDirectory).OfficeAsync(source, format, work, token);
-                    File.Move(converted, output);
-                }
-                outputs.Add(output);
+                var pdf = pdfOptions ?? new PdfEditOptions();
+                if (pdf.Pages is { Length: > 10000 } || pdf.PageRotations is { } rotations && (pdf.Pages is null || rotations.Length != pdf.Pages.Length || rotations.Any(r => r % 90 != 0)))
+                    throw new ArgumentException("Geçerli sayfa sırası ve döndürme değerleri seç.");
+                return DocumentEngine.Pdf(action == "mergePDF" ? "mergePDFs" : action, inputs, destination, pages: pdf.Pages, token: token, password: document.Password,
+                    pageRotations: pdf.PageRotations, uniformWidth: pdf.UniformWidth, pagesPerFile: pdf.PagesPerFile, pageRanges: pdf.PageRanges);
             }
+            if (action != "extractArchive") throw new ArgumentException("Desteklenmeyen dosya aracı.");
+            using var tx = new ExportTransaction(destination);
+            var outputs = inputs.SelectMany(input => ArchiveEngine.Extract(input, tx.StagingDirectory, document.Password, progress, token)).ToArray();
             return tx.Publish(outputs, token);
         }, token);
     }
@@ -104,6 +71,14 @@ public sealed class Operations(Toolchain tools)
     public static string[] ReadQr(string input)
     {
         using var image = PhotoCodec.Read(input);
+        return DecodeQr(image);
+    }
+    public static string[] ReadQr(byte[] png)
+    {
+        using var image = new MagickImage(png, new MagickReadSettings { Format = MagickFormat.Png }); return DecodeQr(image);
+    }
+    private static string[] DecodeQr(MagickImage image)
+    {
         // Bound the decoding buffer as well as the source image's existing 100 MP limit.
         if (image.Width > 2400 || image.Height > 2400) image.Resize(new MagickGeometry(2400, 2400));
         var reader = new ZXing.BarcodeReaderGeneric

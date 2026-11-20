@@ -10,6 +10,8 @@ AutoReqProv:    no
 Requires:       glibc, libstdc++, zlib, openssl-libs, libicu
 Requires:       fontconfig, libX11, libICE, libSM, libXrandr, libXi, libXcursor
 Requires:       mesa-libGL, xorg-x11-server-Xwayland
+Requires:       poppler-utils, tesseract, tesseract-langpack-eng
+Recommends:     tesseract-langpack-tur
 Recommends:     libreoffice
 
 %global debug_package %{nil}

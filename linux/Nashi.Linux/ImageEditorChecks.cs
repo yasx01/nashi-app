@@ -7,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using System.Diagnostics;
+using Avalonia.Platform;
 
 namespace Nashi.Linux;
 
@@ -57,7 +58,16 @@ internal static class ImageEditorChecks
         Check(annotation.EditorCanvas.Marks.Count == 1, "Undo restores deleted mark");
         Preview(annotation);
         using (var frame = annotation.CaptureRenderedFrame() ?? throw new Exception("Annotation render missing")) frame.Save(Path.ChangeExtension(preview, ".annotate.png"));
-        annotation.Close(); host.Close();
+        annotation.Close();
+        var artwork = Path.Combine(root, "Nashi artwork.png");
+        using (var source = AssetLoader.Open(new Uri("avares://Nashi.Linux/Assets/NashiIcon.png")))
+        using (var output = File.Create(artwork)) source.CopyTo(output);
+        var visual = new ImageEditorWindow(host, "cropImage", [artwork]); _ = visual.ShowDialog(host); Dispatcher.UIThread.RunJobs();
+        using (visual.CaptureRenderedFrame()) { }
+        var w = visual.EditorCanvas.ImageWidth; var h = visual.EditorCanvas.ImageHeight;
+        Drag(visual, new(w * .15, h * .1), new(w * .85, h * .9)); Preview(visual);
+        using (var frame = visual.CaptureRenderedFrame() ?? throw new Exception("Artwork crop frame missing")) frame.Save(Path.ChangeExtension(preview, ".crop-artwork.png"));
+        visual.Close(); host.Close();
         Console.WriteLine("PASS: real pointer crop creation/move/Shift-resize, Enter, annotation move/delete and keyboard undo.");
     }
 }

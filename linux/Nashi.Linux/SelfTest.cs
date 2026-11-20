@@ -42,6 +42,8 @@ internal static class SelfTest
         {
             Task.Run(() => CheckOperations(root)).GetAwaiter().GetResult();
             Task.Run(() => ImageEditingChecks.Run(root)).GetAwaiter().GetResult();
+            Task.Run(() => DocumentChecks.Run(root)).GetAwaiter().GetResult();
+            var pdfThumbnails = Task.Run(() => PdfOrganizerChecks.Prepare(root)).GetAwaiter().GetResult();
             var window = new MainWindow(dataDirectory: Path.Combine(root, "library"));
             window.Show(); Dispatcher.UIThread.RunJobs();
             using (var frame = window.CaptureRenderedFrame() ?? throw new Exception("No rendered frame."))
@@ -69,6 +71,7 @@ internal static class SelfTest
             using (var frame = wheel.CaptureRenderedFrame() ?? throw new Exception("No wheel frame.")) frame.Save(Path.ChangeExtension(preview, ".wheel.png"));
             wheel.Close(); selectedWindow.Close();
             ImageEditorChecks.Run(root, preview);
+            PdfOrganizerChecks.Interact(pdfThumbnails, root, preview);
             Console.WriteLine("PASS: image/PDF/subtitle exports, originals, duplicate names, cancellation, invalid crop, Home render and Library shortcut; installed FFmpeg/LibreOffice checks included when available.");
         }
         finally { Directory.Delete(root, true); }
@@ -84,7 +87,7 @@ internal static class SelfTest
         Task<IReadOnlyList<string>> Run(string action, string format, CancellationToken token = default, int width = 40, int height = 30, int x = 0) =>
             operations.RunAsync(action, [input], target, format, 85, width, height, x, 0, new MediaOptions(), progress, token);
         Check(Operations.Formats([input]).Contains("jpg"), "PNG to JPG available");
-        Check(Operations.Formats(["example.pages"]).Length == 0, "Unavailable routes hidden");
+        Check(Operations.Formats(["example.pages"]).Contains("pdf"), "Pages conversion connected");
         var jpg = (await Run("convert", "jpg"))[0];
         using (var image = PhotoCodec.Read(jpg)) Check(image.Width == 80 && image.Height == 60, "JPEG dimensions");
         var second = (await Run("convert", "jpg"))[0]; Check(jpg != second && File.Exists(jpg), "No overwrite");

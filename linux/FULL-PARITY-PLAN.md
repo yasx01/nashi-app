@@ -42,3 +42,14 @@ Yalnızca katalogda görünmesi veya genel derleme testinin geçmesi yeterli de�
 - Editör: gerçek fare olaylarıyla kırpma oluşturma/taşıma/Shift ile oran koruma,
   Enter ile kabul, anotasyon taşıma/silme/Ctrl+Z testleri geçti.
 - Görsel metaveri alan düzenlemesi ve kalan kabul kapıları hâlâ tamamlanmadı.
+- Belge motoru: Linux Poppler ile sınırlı PDF görüntüleme; PDF/Office/EPUB
+  dönüşümleri, düzenlenebilir/korunan belge düzeni, Pages dosyası ve klasör paketi
+  gerçek roundtrip testleriyle geçti. PDF sayfalarından QR okuma doğrulandı.
+  OCR yolu eklendi; ayrı OCR çıktısı testi henüz tamamlanmadı.
+- RTFD dönüştürücüsü ortak motora taşındı. Ek dosyaların sembolik bağlantılarla
+  paket dışından okunması ve aşırı açılmış içerik reddediliyor; sınır testleri geçti.
+- PDF sayfa düzenleyicisi: gerçek çıktı ve arayüz testlerinde sıralama, çoğaltma,
+  her kopyayı ayrı döndürme, eşit genişlik ve sayfa aralığıyla bölme geçti.
+  Kullanıcı/sahip şifreleri, yanlış şifre ve aşırı büyük sayfa reddi doğrulandı.
+- Ortak motora taşıma sonrası Windows çapraz derlemesi sıfır hata/uyarıyla geçti;
+  ortak motorun doğrulanan araçlarla 2.151 kontrolü yeniden geçti.
