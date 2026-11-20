@@ -308,7 +308,7 @@ internal sealed class MediaEditorWindow : Window
             canvas.ClearImage(); playback?.Dispose(); playback = null; processed = false; rangeEnd = null; canvas.Mode = action is "cropVideo" or "redactVideo" ? "crop" : "view";
             var still = await MediaPlayback.ArtworkAsync(tools, temporary, inputs[0], info, cancellation.Token);
             if (closed) return; canvas.SetImage(still);
-            OpenPlayer(inputs[0], info); position.IsEnabled = info.Duration > 0;
+            await OpenPlayer(inputs[0], info, cancellation.Token); position.IsEnabled = info.Duration > 0;
             message.Text = "Özgün dosya · Oynatmak için Space. Dışa aktarma özgün dosyayı kullanır.";
             if (timelineBitmap is null)
             {
@@ -326,17 +326,17 @@ internal sealed class MediaEditorWindow : Window
         else
         {
             var previewInfo = await engine.InspectAsync(path, token);
-            canvas.SetImage(await MediaPlayback.ArtworkAsync(tools, temporary, path, previewInfo, token)); OpenPlayer(path, previewInfo);
+            canvas.SetImage(await MediaPlayback.ArtworkAsync(tools, temporary, path, previewInfo, token)); await OpenPlayer(path, previewInfo, token);
         }
         message.Text = "İşlenmiş çıktı · " + Path.GetFileName(path) + " · oynatmak için Space.";
     }
-    private void OpenPlayer(string path, MediaInfo media)
+    private async Task OpenPlayer(string path, MediaInfo media, CancellationToken token)
     {
         playbackDuration = media.Duration; updating = true; position.Maximum = Math.Max(.001, media.Duration); position.Value = 0; updating = false; position.IsEnabled = media.Duration > 0;
         playback = new MediaPlayback(media, silent: silentPlayback); var current = playback;
         current.FrameUpdated += () => { if (!closed && playback == current && current.Frame is { } frame) canvas.SetFrame(frame); };
         current.Failed += text => { if (!closed && playback == current) message.Text = text; };
-        current.Open(path);
+        await current.OpenReadyAsync(path, token);
     }
     private async Task<byte[]> Filmstrip(CancellationToken token)
     {

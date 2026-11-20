@@ -8,6 +8,7 @@ Source0:        nashi-linux-x64.tar.gz
 ExclusiveArch:  x86_64
 AutoReqProv:    no
 Requires:       glibc, libstdc++, zlib, openssl-libs, libicu
+Requires:       coreutils, xdg-utils, konsole
 Requires:       fontconfig, libX11, libICE, libSM, libXrandr, libXi, libXcursor
 Requires:       mesa-libGL, xorg-x11-server-Xwayland
 Requires:       poppler-utils, tesseract, tesseract-langpack-eng, perl-interpreter

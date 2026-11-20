@@ -79,6 +79,24 @@ internal sealed class MediaPlayback : IDisposable
         else if (Player.State == VLCState.Paused) Player.SetPause(false);
         else if (!Player.Play()) throw new IOException("Medya oynatıcısı başlatılamadı.");
     }
+    internal async Task OpenReadyAsync(string path, CancellationToken token)
+    {
+        Open(path);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token); timeout.CancelAfter(TimeSpan.FromSeconds(10));
+        try
+        {
+            while (true)
+            {
+                token.ThrowIfCancellationRequested();
+                if (Volatile.Read(ref disposed) != 0) throw new OperationCanceledException(token);
+                var state = Player.State;
+                if (state is VLCState.Paused or VLCState.Playing) return;
+                if (state == VLCState.Error) throw new IOException("Medya oynatıcısı dosyayı açamadı.");
+                await Task.Delay(20, timeout.Token);
+            }
+        }
+        catch (OperationCanceledException) when (!token.IsCancellationRequested && disposed == 0) { throw new TimeoutException("Medya önizlemesi zamanında başlatılamadı."); }
+    }
     internal void Seek(double seconds, double duration)
     {
         if (!double.IsFinite(seconds) || !double.IsFinite(duration) || duration <= 0) throw new ArgumentException("Geçerli zaman ve süre seç.");

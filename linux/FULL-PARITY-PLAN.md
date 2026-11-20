@@ -78,3 +78,14 @@ Yalnızca katalogda görünmesi veya genel derleme testinin geçmesi yeterli de�
 - Medya/OCR commit'i df11170 ve üst veri/PDF commit'i b395e9c temiz Fedora
   koşularında RPM üretimi, kurulum sonrası test ve yerel pencere kontrolünü geçti
   (44778026475, 44779415243). Bunlar tam sürüm kabul listesinin tamamı değildir.
+- Dosya eylemleri: native kopya/taşıma; boş dosyalar, Unix izinleri, isim
+  çakışmaları, yeni satırlı/Unicode yollar, hedefin kaynak dışında olması,
+  iç içe seçim ve iptal rollback testleri geçti. Paylaşım henüz eklenmedi.
+- Float: kompakt/geniş raf, seçim/referans kaldırma/Nashi'de yeniden kullanım,
+  gerçek dosya panosu ve negatif ekran koordinatlarıyla kenar geometrisi geçti.
+  Dış uygulamaya gerçek sürükleme ve compositor yerleşimi henüz doğrulanmadı.
+- Pano/kitaplık commit'i 446cfc2 temiz Fedora CI 44781964965'te RPM kurulum ve
+  native pencere kontrolü dahil geçti.
+- Salt okunur geçici klasörlerin iptal temizliği düzeltildi. 500 izinli kaynak
+  klasör ve symlink hedefinin izinleri değişmeden kopya rollback'i geçti.
+  Medya önizlemesi de native açılış onayını bekliyor; erken hazır durumu kaldırıldı.

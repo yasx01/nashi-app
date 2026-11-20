@@ -28,40 +28,55 @@ var. Yeniden uygulama. İki CI koşusunda RPM üretimi/kurulumu, kurulan uygulam
 testleri ve Xvfb yerel pencere testi geçti. Son tam ortak motor kontrolü **2.158**;
 Windows çapraz derlemesi sıfır hata/uyarı. OCR temiz Fedora'da gerçek taramayla geçti.
 
-## Şu an commit edilmemiş iş — bunu koru
+## Güncel çalışma
 
-Pano/kitaplık/önizleme kodu yazıldı, henüz commit/push edilmedi:
+Pano/kitaplık/önizleme **`446cfc2`** ile commit/push edildi. Temiz Fedora CI
+**`44781964965` başarılı**: RPM üretimi/kurulumu ve yerel pencere dahil. Bu bölümü
+tekrar yazma. Pano 16 MB metin sınırı ve tekrarlı görsel; kitaplık çoklu seçim,
+geçmişten kaldırma, Linux case-sensitive yollar; ortak PDF/şifre/metin/medya
+önizlemesi ve hızlı geçişte iptal testli. `.library.png` üretildi.
 
-- Yeni: `linux/Nashi.Linux/ClipboardImport.cs`, `FilePreviewWindow.cs`, `LibraryChecks.cs`.
-- Değişen: `MainWindow.cs`, `MediaEditorWindow.cs`, `MediaPlayback.cs`, `SelfTest.cs`,
-  `windows/Nashi.Core/LibraryStore.cs`, `linux/FULL-PARITY-PLAN.md`.
-- Pano: metin/görsel, tekrar yapıştırma, 16 MB metin sınırı; görsel bırakma.
-  Bitmap panonun kaynağına ait olabileceği için çağıran dispose etmiyor.
-- Kitaplık: çoklu seçim, tekrar kullanma, önizleme, geçmişten kaldırma.
-  Geçmişten kaldırma dosya silmez. Linux'ta `Case.txt`/`case.txt` ayrı tutuluyor.
-- Ortak önizleme: görsel/metin, PDF sayfa/şifre, belge → PDF, klasör, gömülü medya;
-  dosya geçişi eski yüklemeyi iptal eder, kapanış geçici dosyaları/oynatıcıyı temizler.
-- İlk medya karesi `MediaPlayback.ArtworkAsync` ile ortaklaştırıldı. Medya boyut
-  kontrolleri motorun 8192 sınırına eşitlendi. “Medya araçlarını kur” tam doğrulanmış
-  araçları kuruyor; sistemdeki kısıtlı ffmpeg-free'ye güvenip eksik kodekte kalmamalı.
+Şu an **commit edilmemiş dosya eylemleri / Float bölümü** var:
 
-Bu bölümün tam masaüstü testi geçti: pano/tekrar yapıştırma/sınır, kitaplık/geçmiş,
-PDF/şifre/metin/eksik dosya/medya, hızlı geçişte iptal. Ortak kısa kontrol **1.958**
-geçti (FFmpeg/indirme ek kontrolleri bu kısa koşuda kapalıydı).
-Son görsel değişikliğiyle tam masaüstü testi de tekrar geçti; kitaplık ve marka
-varlığı önizleme ekran görüntüleri üretildi. Bu kod için
-henüz yeni temiz Fedora CI başlatılmadı. `DEV-HANDOFF.md` de henüz commit edilmedi.
+- Yeni: `FileActions.cs`, `FileActionChecks.cs`, `FloatShelf.cs`, `FloatChecks.cs`.
+- Değişen: `MainWindow.cs`, `SelfTest.cs`, `linux/nashi.spec`, ortak
+  `ExportTransaction.cs`, `windows/Nashi.Verify/Program.cs`.
+- Native coreutils ile üzerine yazmadan kopyalama/taşıma; Unix izinleri, boş dosya,
+  Unicode/yeni satırlı isim, çakışma, fiziksel hedefin kaynak içinde olmaması,
+  iç içe seçim, sembolik bağlantı hedefinin korunması ve kopya iptalinde rollback
+  testleri **geçti**. Taşıma yarıda kalırsa tamamlananlar ve hedef açıkça bildirilir.
+- `ExportTransaction.Publish` yeni `allowEmptyFiles` parametresini yalnız dosya
+  kopyalamada kullanıyor. Varsayılan hâlâ boş dönüştürme çıktısını reddediyor;
+  buna ayrı regresyon eklendi. Yeni ortak kısa kontrol **1.960 geçti** (salt okunur temizlik regresyonu dahil).
+- Dosya eylemleri ana sayfa ve kitaplık seçimine bağlandı: dosya/yol panosu,
+  klasöre kopyala/taşı, klasörde göster, Konsole. Sistem uygulamalarını test için
+  açmadık. **Paylaşım henüz eklenmedi.**
+- Float: kompakt/geniş raf, dosya ekleme, çoklu seçim, referansı raftan kaldırma,
+  Nashi'ye geri alma, ortak önizleme ve gerçek dosya panosu; negatif monitör
+  koordinatlarıyla kenar geometrisi testleri **geçti**. Native dışarı sürükleme
+  bağlandı, ancak başka uygulamaya gerçek DnD ve KDE kenar yerleşimi doğrulanmadı.
+- Geniş raf 460 px yüksekliğe indirildi; son tam masaüstü testi bu görselle geçti.
+- Salt okunur geçici klasörler iptalde kalıyordu; ortak rollback yalnız kendisine
+  ait klasörlere silme izni ekliyor, symlink hedeflerini takip etmiyor. Gerçek
+  500 izinli klasörle ve dış hedefle test edildi: kaynak/hedef izinleri korunuyor.
+- Medya önizlemesi artık native oynatıcı gerçekten Paused/Playing durumuna
+  gelmeden hazır sayılmıyor. Açılış iptal/zaman aşımı da ele alındı; testler geçti.
+- Son tam masaüstü günlüğü: `/tmp/nashi-full-desktop-tests.log`. Float görselleri:
+  `nashi-full-progress.float.png` ve `.float-compact.png`.
+- Son ortak temel kontrol **1.960 geçti**; Windows çapraz derlemesi de sıfır
+  hata/uyarıyla geçti. Sonuç `/tmp/nashi-windows-shared-build.log` içinde.
 
 ## Sıradaki adım
 
-1. `git status --short` ve mevcut diff'i kontrol et; yukarıdaki işi baştan yazma.
-2. Gerekliyse son görsel test değişikliğini doğrula, pano/kitaplık bölümünü
-   `fedora-full` dalına commit/push et. Yeni CI kimliğini bu nota kaydet.
-3. Aynı canlı CI koşusunu izle; gereksiz push ile iptal edip yeniden başlatma.
-4. Ardından dosya eylemleri/Float ve ayarlar gibi kalan gruplara ilerle.
+1. Mevcut dosya eylemleri/Float diff'ini koru; Windows çapraz derleme sonucunu
+   kontrol et. Kod derlemesi ve ilgili kontroller geçti; testleri sebepsiz tekrarlama.
+2. Bu bölümü `fedora-full` dalına commit/push et; yeni temiz Fedora CI kimliğini
+   nota yaz ve aynı koşuyu izle. Canlı koşuyu yeni push ile gereksiz iptal etme.
+3. Ardından paylaşım, ayarlar/profiller ve kalan KDE entegrasyonuna ilerle.
+   Native DnD'yi headless geometri testinden geçti diye çalışıyor sayma.
 
 Kalan büyük gruplar: otomatik metin/yüz sansür alanı bulma; bütün 27 araç/46 girdi/
-yaklaşık 300 dönüşüm yolunun doğrulanması; dosya eylemleri/Float/dışarı sürükleme;
+yaklaşık 300 dönüşüm yolunun doğrulanması; paylaşım ve native Float/dışarı sürükleme doğrulaması;
 KDE/Wayland genel kısayol ve sürükleme çarkı, sekiz pencere yerleşimi, IPC, tepsi,
 oturum açılışı; ayarlar/profiller/dil/çıktı konumu; doğrulanmış güncelleme/geri alma;
 tam sürüm yayını. Platformda başka yöntem gerekiyorsa önemli kararı kullanıcıyla

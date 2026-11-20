@@ -127,7 +127,7 @@ internal sealed class FilePreviewWindow : Window
                 current.FrameUpdated += () => { if (!token.IsCancellationRequested && playback == current && current.Frame is { } frame) canvas?.SetFrame(frame); };
                 current.Failed += text => { if (!token.IsCancellationRequested && playback == current) preview.Content = MainWindow.Label(text, 14); };
                 updating = true; seek.Maximum = Math.Max(.001, info.Duration); seek.Value = 0; seek.IsEnabled = info.Duration > 0; updating = false;
-                mediaControls.IsVisible = true; current.Open(path); return;
+                await current.OpenReadyAsync(path, token); token.ThrowIfCancellationRequested(); mediaControls.IsVisible = true; return;
             }
             var pdf = path;
             if (ext != "pdf" && Operations.Formats([path]).Contains("pdf"))

@@ -75,7 +75,7 @@ public sealed class MainWindow : Window
         caption.Children.Add(selection);
         caption.Children.Add(Label("Görseller, videolar, belgeler ve aralarındaki küçük şeyler.", 12, true));
         var picks = new WrapPanel { Orientation = Orientation.Horizontal };
-        picks.Children.Add(Button("Dosya seç", Choose, true)); picks.Children.Add(Button("Klasör seç", ChooseFolder)); picks.Children.Add(Button("Yapıştır", Paste));
+        picks.Children.Add(Button("Dosya seç", Choose, true)); picks.Children.Add(Button("Klasör seç", ChooseFolder)); picks.Children.Add(Button("Yapıştır", Paste)); picks.Children.Add(Button("Dosya eylemleri", () => ShowFileActions(files.ToArray()))); picks.Children.Add(Button("Float’ta tut", () => OpenFloat(files.ToArray())));
         wheel = Button("Çarkı aç", OpenWheel, true); picks.Children.Add(wheel); caption.Children.Add(picks);
         foreach (var control in picks.Children) control.Margin = new Thickness(0, 0, 6, 6);
         top.Children.Add(caption); var garden = Garden(); Grid.SetColumn(garden, 1); top.Children.Add(garden);
@@ -95,6 +95,8 @@ public sealed class MainWindow : Window
         var libraryActions = new WrapPanel();
         libraryActions.Children.Add(Button("Seçilenleri önizle", async () => { await new FilePreviewWindow(this, SelectedLibraryPaths(), tools).ShowDialog(this); }));
         libraryActions.Children.Add(Button("Seçilenleri kullan", () => { files.Clear(); AddFiles(SelectedLibraryPaths()); ShowLibrary(false); return Task.CompletedTask; }));
+        libraryActions.Children.Add(Button("Float’ta tut", () => OpenFloat(SelectedLibraryPaths())));
+        libraryActions.Children.Add(Button("Dosya eylemleri", () => ShowFileActions(SelectedLibraryPaths())));
         libraryActions.Children.Add(Button("Tümünü seç", () => { foreach (var entry in library.Search(search.Text ?? "", "tr")) selectedLibrary.Add(entry.Id); RenderLibrary(); return Task.CompletedTask; }));
         libraryActions.Children.Add(Button("Seçimi temizle", () => { selectedLibrary.Clear(); RenderLibrary(); return Task.CompletedTask; }));
         libraryActions.Children.Add(Button("Geçmişten kaldır", () => { library.Forget(selectedLibrary); selectedLibrary.Clear(); RenderLibrary(); status.Text = "Geçmiş güncellendi. Dosyaların korundu."; return Task.CompletedTask; }));
@@ -223,6 +225,31 @@ public sealed class MainWindow : Window
         else Import(await Task.Run(() => ClipboardImport.Text(text, library.DirectoryPath)), "Yapıştırılan metin");
     }
     private void ShowLibrary(bool show) { home.IsVisible = !show; libraryPage.IsVisible = show; RenderLibrary(); }
+    internal void UseFiles(IEnumerable<string> paths)
+    {
+        if (!IsVisible && TryGetPlatformHandle() is null) { new MainWindow(paths.ToArray(), library.DirectoryPath).Show(); return; }
+        files.Clear(); AddFiles(paths); ShowLibrary(false); Show(); Activate();
+    }
+    private Task OpenFloat(string[] paths)
+    {
+        if (paths.Length == 0) throw new ArgumentException("Önce dosya seç."); new FloatShelf(this, paths, tools).Show(); return Task.CompletedTask;
+    }
+    internal async Task ShowFileActions(string[] paths, Window? owner = null)
+    {
+        if (paths.Length == 0) throw new ArgumentException("Önce dosya seç.");
+        var panel = new StackPanel { Spacing = 10 }; panel.Children.Add(Label("Dosya eylemleri", 24)); panel.Children.Add(Label($"{paths.Length} dosya veya klasör", 13, true));
+        var dialog = Dialog("Dosya eylemleri", panel);
+        panel.Children.Add(Button("Dosyaları kopyala", async () => { await FileActions.CopyToClipboard(dialog, paths); dialog.Close(); status.Text = "Dosyalar panoya kopyalandı."; }));
+        panel.Children.Add(Button("Yolları kopyala", async () => { if (Clipboard is not null) await Clipboard.SetTextAsync(string.Join('\n', paths)); dialog.Close(); }));
+        panel.Children.Add(Button("Klasörde göster", () => { FileActions.Reveal(paths); dialog.Close(); return Task.CompletedTask; }));
+        panel.Children.Add(Button("Terminalde aç", () => { FileActions.Terminal(paths[0]); dialog.Close(); return Task.CompletedTask; }));
+        foreach (var move in new[] { false, true }) panel.Children.Add(Button(move ? "Klasöre taşı…" : "Klasöre kopyala…", async () =>
+        {
+            var folder = await Folder(dialog); if (folder is null) return; dialog.Close();
+            await Run(move ? "Taşı" : "Kopyala", (progress, token) => FileActions.Transfer(paths, folder, move, progress, token), moved: move);
+        }));
+        await dialog.ShowDialog(owner ?? this);
+    }
     private void Import(string path, string label)
     {
         AddFiles([path]); library.Record(label, [path]); RenderLibrary(); status.Text = label + " içe alındı.";
@@ -424,13 +451,13 @@ public sealed class MainWindow : Window
         var folders = await owner.StorageProvider.OpenFolderPickerAsync(new() { Title = "Yeni dosyaların kaydedileceği klasör" });
         return folders.FirstOrDefault()?.TryGetLocalPath();
     }
-    private async Task Run(string label, Func<IProgress<OperationProgress>, CancellationToken, Task<IReadOnlyList<string>>> work)
+    private async Task Run(string label, Func<IProgress<OperationProgress>, CancellationToken, Task<IReadOnlyList<string>>> work, bool moved = false)
     {
         using var cancellation = new CancellationTokenSource(); operation = cancellation; cancel.IsVisible = progress.IsVisible = true;
         try
         {
             var outputs = await work(new Progress<OperationProgress>(p => { if (operation != cancellation) return; progress.IsIndeterminate = p.Fraction is null; progress.Value = (p.Fraction ?? 0) * 100; status.Text = p.Label; }), cancellation.Token);
-            status.Text = outputs.Count == 0 ? "İşlem tamamlandı." : $"{outputs.Count} yeni dosya kaydedildi. Orijinaller korundu.";
+            status.Text = outputs.Count == 0 ? "İşlem tamamlandı." : moved ? $"{outputs.Count} öğe taşındı. Hedefler kitaplığa eklendi." : $"{outputs.Count} yeni dosya kaydedildi. Orijinaller korundu.";
             try { library.Record(label, outputs); } catch (Exception error) { status.Text += " Kitaplık kaydedilemedi: " + error.Message; }
             RenderLibrary();
         }

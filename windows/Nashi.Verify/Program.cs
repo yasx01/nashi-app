@@ -60,6 +60,24 @@ try
         catch (OperationCanceledException) { checks++; }
     }
     Check(!Directory.EnumerateDirectories(root).Any(), "Staging files survived cancellation");
+    using(var transaction=new ExportTransaction(root))
+    {
+        var empty=Path.Combine(transaction.StagingDirectory,"Empty.txt");File.WriteAllBytes(empty,[]);
+        try{transaction.Publish([empty],CancellationToken.None);throw new Exception("Conversion accepted an empty output");}catch(InvalidDataException){checks++;}
+    }
+
+    if(OperatingSystem.IsLinux())
+    {
+        string staging;
+        using(var transaction=new ExportTransaction(root))
+        {
+            staging=transaction.StagingDirectory;var readOnly=Path.Combine(staging,"Read only");Directory.CreateDirectory(readOnly);File.WriteAllText(Path.Combine(readOnly,"keep.txt"),"data");
+            File.SetUnixFileMode(readOnly,UnixFileMode.UserRead|UnixFileMode.UserExecute);
+        }
+        var survived=Directory.Exists(staging);
+        if(survived)File.SetUnixFileMode(Path.Combine(staging,"Read only"),UnixFileMode.UserRead|UnixFileMode.UserWrite|UnixFileMode.UserExecute);
+        Check(!survived,"Read-only staging directory survived rollback");
+    }
     var libraryDirectory=Path.Combine(root,"LibraryData");var library=new LibraryStore(libraryDirectory);
     var unicodeFile=Path.Combine(root,"Türkçe 🍐.txt");File.WriteAllText(unicodeFile,"original");library.Record("Pasted text",[unicodeFile]);library.SetAppearance("dark");
     library.SetWindowManagement(false);
