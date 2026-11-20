@@ -29,7 +29,15 @@ public sealed class App : Application
     public override void OnFrameworkInitializationCompleted()
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-            desktop.MainWindow = new MainWindow(desktop.Args ?? []);
+        {
+            var args = desktop.Args ?? [];
+            if (args.Length == 2 && args[0] == "--desktop-smoke-test")
+            {
+                desktop.MainWindow = new MainWindow(dataDirectory: Path.Combine(Path.GetTempPath(), "nashi-desktop-test-" + Guid.NewGuid().ToString("N")));
+                SelfTest.CheckDesktop(desktop, args[1]);
+            }
+            else desktop.MainWindow = new MainWindow(args);
+        }
         base.OnFrameworkInitializationCompleted();
     }
 }

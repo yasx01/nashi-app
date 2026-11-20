@@ -18,7 +18,7 @@ jobs:
       DOTNET_NOLOGO: '1'
     steps:
       - name: Install Fedora build and test dependencies
-        run: dnf install -y git tar gzip curl python3 rpm-build dotnet-sdk-10.0 fontconfig libX11 libICE libSM libXrandr libXi libXcursor mesa-libGL ffmpeg-free libreoffice-writer
+        run: dnf install -y git tar gzip curl python3 rpm-build dotnet-sdk-10.0 fontconfig libX11 libICE libSM libXrandr libXi libXcursor mesa-libGL ffmpeg-free libreoffice-writer xorg-x11-server-Xvfb xorg-x11-xauth
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           persist-credentials: false
@@ -40,6 +40,7 @@ jobs:
           rpm -K nashi-*.rpm
           dnf install -y ./nashi-*.rpm
           /opt/nashi/Nashi.Linux --self-test /tmp/nashi-installed-preview.png
+          xvfb-run -a /opt/nashi/Nashi.Linux --desktop-smoke-test /tmp/nashi-native-preview.png
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: nashi-fedora-x86_64

@@ -6,11 +6,34 @@ using Avalonia.Threading;
 using ImageMagick;
 using Nashi.Core;
 using System.IO.Compression;
+using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Media.Imaging;
 
 namespace Nashi.Linux;
 
 internal static class SelfTest
 {
+    public static void CheckDesktop(IClassicDesktopStyleApplicationLifetime desktop, string preview)
+    {
+        var window = desktop.MainWindow!;
+        window.Opened += async (_, _) =>
+        {
+            try
+            {
+                await Task.Delay(250);
+                Check(window.IsVisible && window.ClientSize.Width >= 700, "Native desktop window opened");
+                using var frame = new RenderTargetBitmap(new PixelSize((int)window.ClientSize.Width, (int)window.ClientSize.Height), new Vector(96, 96));
+                frame.Render(window);
+                Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(preview))!);
+                frame.Save(preview);
+                Console.WriteLine("PASS: native Linux desktop window opened and rendered.");
+                desktop.Shutdown(0);
+            }
+            catch (Exception error) { Console.Error.WriteLine(error); desktop.Shutdown(1); }
+        };
+    }
+
     public static void Run(string preview)
     {
         var root = Path.Combine(Path.GetTempPath(), "nashi-linux-test-" + Guid.NewGuid().ToString("N"));
