@@ -36,7 +36,10 @@ tekrar yazma. Pano 16 MB metin sınırı ve tekrarlı görsel; kitaplık çoklu 
 geçmişten kaldırma, Linux case-sensitive yollar; ortak PDF/şifre/metin/medya
 önizlemesi ve hızlı geçişte iptal testli. `.library.png` üretildi.
 
-Şu an **commit edilmemiş dosya eylemleri / Float bölümü** var:
+**Dosya eylemleri / Float bölümü `bb37748` ile commit/push edildi.**
+CI `44785250238` Float ekran görüntüsünü ilk çizimden önce aldığı için başarısız oldu.
+Motor/dosya işlemleri geçti. `FloatChecks` artık en fazla 5 saniye gerçek ilk kareyi
+bekliyor; boş kareyi hâlâ hata sayıyor. Bu düzeltme yerel tam testte geçti; yeni CI bekleniyor. Aşağıdaki kodu yeniden yazma:
 
 - Yeni: `FileActions.cs`, `FileActionChecks.cs`, `FloatShelf.cs`, `FloatChecks.cs`.
 - Değişen: `MainWindow.cs`, `SelfTest.cs`, `linux/nashi.spec`, ortak
@@ -68,12 +71,16 @@ geçmişten kaldırma, Linux case-sensitive yollar; ortak PDF/şifre/metin/medya
 
 ## Sıradaki adım
 
-1. Mevcut dosya eylemleri/Float diff'ini koru; Windows çapraz derleme sonucunu
-   kontrol et. Kod derlemesi ve ilgili kontroller geçti; testleri sebepsiz tekrarlama.
-2. Bu bölümü `fedora-full` dalına commit/push et; yeni temiz Fedora CI kimliğini
-   nota yaz ve aynı koşuyu izle. Canlı koşuyu yeni push ile gereksiz iptal etme.
-3. Ardından paylaşım, ayarlar/profiller ve kalan KDE entegrasyonuna ilerle.
-   Native DnD'yi headless geometri testinden geçti diye çalışıyor sayma.
+1. Float ilk kare test düzeltmesi commit edilmek üzere; `git log` ve son CI
+   kimliğini kontrol et. Yerel tam test, 1.960 temel kontrol ve Windows derlemesi geçti.
+2. Paylaşım için KDE Purpose API'si, KDE kısayolları için KWin API'si inceleniyor;
+   bu iki alanda henüz kod değişikliği yapılmadı. Paylaşım için mevcut
+   `python3-pyside6` (Qt 6.11.2) + `kf6-purpose` kullanılabilir; yeni C++/Qt
+   köprüsü gerekmiyor. Yerel API: `/usr/lib64/qt6/qml/org/kde/purpose/AlternativesView.qml`
+   (`pluginType`, `inputData`, `finished(output,error,message)`). KWin genel dosya sürükleme verisini
+   script API'sinden doğrudan sunmuyor; native helper gerekip gerekmediği araştırılmalı.
+3. Ardından ayarlar/profiller ve kalan KDE entegrasyonuna ilerle. Native DnD'yi
+   headless geometri testinden geçti diye çalışıyor sayma.
 
 Kalan büyük gruplar: otomatik metin/yüz sansür alanı bulma; bütün 27 araç/46 girdi/
 yaklaşık 300 dönüşüm yolunun doğrulanması; paylaşım ve native Float/dışarı sürükleme doğrulaması;

@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input.Platform;
 using Avalonia.LogicalTree;
+using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.Platform.Storage;
 using Nashi.Core;
@@ -20,15 +21,26 @@ internal static class FloatChecks
             var timeout = Stopwatch.StartNew(); while (!task.IsCompleted && timeout.Elapsed < TimeSpan.FromSeconds(10)) { Thread.Sleep(10); Dispatcher.UIThread.RunJobs(); }
             Check(task.IsCompleted, "async request completes"); task.GetAwaiter().GetResult();
         }
+        Bitmap Frame(Window window)
+        {
+            var timeout = Stopwatch.StartNew();
+            do
+            {
+                Dispatcher.UIThread.RunJobs();
+                if (window.CaptureRenderedFrame() is { } frame) return frame;
+                Thread.Sleep(10);
+            } while (timeout.Elapsed < TimeSpan.FromSeconds(5));
+            throw new Exception("Float did not produce a rendered frame within five seconds.");
+        }
         var a = Path.Combine(root, "Nashi artwork.png"); var b = Path.Combine(root, "organizer.pdf");
         var host = new MainWindow(dataDirectory: Path.Combine(root, "float-library")); host.Show(); Dispatcher.UIThread.RunJobs();
         var shelf = new FloatShelf(host, [a, b, a], new Toolchain(Path.Combine(root, "float-tools"), "/usr/bin")); shelf.Show(); Dispatcher.UIThread.RunJobs();
         Check(shelf.Paths.Count == 2 && !shelf.Expanded, "compact shelf deduplicates file paths");
-        using (var frame = shelf.CaptureRenderedFrame() ?? throw new Exception("Compact Float render missing")) frame.Save(Path.ChangeExtension(preview, ".float-compact.png"));
+        using (var frame = Frame(shelf)) frame.Save(Path.ChangeExtension(preview, ".float-compact.png"));
         shelf.SetExpanded(true); Dispatcher.UIThread.RunJobs();
         var list = shelf.GetLogicalDescendants().OfType<ListBox>().Single();
         Check(shelf.Expanded && list.IsEffectivelyVisible && list.ItemCount == 2, "expanded shelf displays actual files");
-        using (var frame = shelf.CaptureRenderedFrame() ?? throw new Exception("Expanded Float render missing")) frame.Save(Path.ChangeExtension(preview, ".float.png"));
+        using (var frame = Frame(shelf)) frame.Save(Path.ChangeExtension(preview, ".float.png"));
         list.SelectedIndex = 0; shelf.RemoveSelected(); Check(shelf.Paths.SequenceEqual([b]) && File.Exists(a), "remove selected reference preserves original file");
         shelf.Add([a]); Check(shelf.Paths.Count == 2, "incoming files join shelf");
         host.UseFiles([b]); Check(host.GetLogicalDescendants().OfType<TextBlock>().Any(text => text.Text == Path.GetFileName(b)), "reuse returns paths to Nashi");
